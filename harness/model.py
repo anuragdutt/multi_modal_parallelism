@@ -63,7 +63,8 @@ class BwTables:
     @classmethod
     def from_csv(cls, path: str | Path) -> "BwTables":
         rows = list(csv.DictReader(open(path)))
-        gemv, ssu, conv = Curve(), Curve(), Curve()
+        gemv, conv = Curve(), Curve()
+        ssu_by: dict[str, Curve] = {}
         attn: dict[int, Curve] = {}
         ar: dict[tuple[int, str], Curve] = {}
         stream = 0.0
@@ -78,13 +79,15 @@ class BwTables:
                 gemv.add(b, gbps)
             elif k == "attn" and r["variant"] == "eager":
                 attn.setdefault(int(p["kv_block"]), Curve()).add(b, gbps)
-            elif k == "ssu" and r["variant"] == "eager":
-                ssu.add(b, gbps)
+            elif k == "ssu":
+                ssu_by.setdefault(r["variant"], Curve()).add(b, gbps)
             elif k == "conv" and r["variant"] == "eager":
                 conv.add(b, gbps)
             elif k == "allreduce":
                 key = (int(p["group_size"]), r["variant"])
                 ar.setdefault(key, Curve(is_time=True)).add(b, ms * 1e3)
+        # graph-captured curves exclude launch overhead; prefer them for kernels that have both
+        ssu = ssu_by.get("graph") or ssu_by.get("eager") or Curve()
         for c in [gemv, ssu, conv, *attn.values(), *ar.values()]:
             c.finalize()
         return cls(gemv=gemv, attn=attn, ssu=ssu, conv=conv, ar=ar, stream=stream)
