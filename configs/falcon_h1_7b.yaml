@@ -1,0 +1,23 @@
+# Falcon-H1-7B-Instruct dimensions and multipliers (from config.json); used with --random-weights.
+hidden: 3072
+intermediate: 12288
+n_q: 12
+n_kv: 2
+head_dim: 128
+n_mamba_heads: 24
+mamba_head_dim: 128
+d_ssm: 3072
+d_state: 256
+n_groups: 1
+d_conv: 4
+chunk: 256
+rms_eps: 1.0e-5
+rope_theta: 100000000000.0
+max_pos: 262144
+attn_in: 1.0
+attn_out: 0.1041666
+key_mult: 0.0307
+ssm_in: 0.4166666
+ssm_out: 0.1178511
+ssm_mults: [0.3535533, 0.25, 0.1767766, 0.5, 0.3535533]
+mlp_mults: [0.2946278, 0.0325520]
