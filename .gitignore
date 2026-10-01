@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.so
+*.o
+
+# Model weights and caches
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.pth
+*.ckpt
+models/
+hf_cache/
+.cache/
+
+# Results and logs
+results/raw/
+logs/
+*.log
+*.nsys-rep
+*.ncu-rep
+*.qdrep
+*.sqlite
+
+# Docker artifacts and local env
+docker/*.tar
+docker/.env
+*.env.local
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*~
+
+# Notebook checkpoints
+.ipynb_checkpoints/
