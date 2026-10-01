@@ -14,9 +14,9 @@ ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_VLLM=0.30.0 \
 RUN apt-get update && apt-get install -y --no-install-recommends git numactl rsync && rm -rf /var/lib/apt/lists/*
 RUN git clone --branch ${VLLM_BRANCH} ${VLLM_FORK} /opt/vllm && cd /opt/vllm && git log -1 --oneline
 RUN set -e; SP=/usr/local/lib/python3.12/dist-packages/vllm; \
-    cd "$SP" && find . -name "*.so" -print0 | xargs -0 -I{} cp --parents {} /opt/vllm/vllm/; \
+    (cd "$SP" && find . -name "*.so" -print0 | xargs -0 -I{} cp --parents {} /opt/vllm/vllm/); \
     rm -rf /opt/vllm/vllm/vllm_flash_attn && cp -r "$SP/vllm_flash_attn" /opt/vllm/vllm/; \
-    uv pip uninstall --system vllm; \
+    cd /opt/vllm && uv pip uninstall --system vllm; \
     uv pip install --system "setuptools>=77.0.3,<81" "setuptools-scm>=8" "setuptools-rust>=1.9" packaging wheel jinja2 regex; \
     cd /opt/vllm && uv pip install --system --no-build-isolation --no-deps -e .; \
     python3 -c "import os, vllm; p=os.path.dirname(vllm.__file__); assert p=='/opt/vllm/vllm', p; \
