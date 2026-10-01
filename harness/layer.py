@@ -119,16 +119,19 @@ class SwingMLP:
 
     def forward(self, y: torch.Tensor, t: OpTimer) -> torch.Tensor:
         w = self.w
-        t.begin("mlp.gateup")
-        gu = K.gemm(y, w.gate_up_fixed)
-        gu[:, : w.n_fixed] *= self.gm
-        t.end("mlp.gateup")
-        t.begin("mlp.act")
-        h = K.silu_and_mul(gu)
-        t.end("mlp.act")
-        t.begin("mlp.down")
-        part = K.gemm(h, w.down_fixed)
-        t.end("mlp.down")
+        if w.n_fixed > 0:
+            t.begin("mlp.gateup")
+            gu = K.gemm(y, w.gate_up_fixed)
+            gu[:, : w.n_fixed] *= self.gm
+            t.end("mlp.gateup")
+            t.begin("mlp.act")
+            h = K.silu_and_mul(gu)
+            t.end("mlp.act")
+            t.begin("mlp.down")
+            part = K.gemm(h, w.down_fixed)
+            t.end("mlp.down")
+        else:  # S = 1.0: the whole MLP slice is swing
+            part = torch.zeros(y.shape[0], self.dims.hidden, device=y.device, dtype=y.dtype)
         a, b = self.my_swing
         if b > a and w.gate_up_swing is not None:
             W = w.n_swing_total
