@@ -983,3 +983,41 @@ Facts discovered while building the infrastructure, all now reflected in the cod
 - CUDA-graph capture works for all modes with the collectives inside. At batch 4, context 2048 the captured step is
   0.31 ms versus 1.9 ms eager, so eager is launch-bound and the graph variant carries the headline numbers; the byte
   model prefers graph-captured kernel curves.
+
+## 22. Pilot findings (2026-10-01, batch 16, graph variant, 4x A6000)
+
+| context | tp4 | tp4_fused | tp4_streams | split22 (no swing) |
+|---|---|---|---|---|
+| 512 | 0.366 ms | 1.10x | 1.17x | 1.12x |
+| 8192 | 0.467 ms | 1.07x | 1.18x | 1.37x |
+
+Per-rank compute with collectives removed (diagnostic `--no-collectives`, graph variant, batch 16): tp4 ranks
+0.265 ms at 512 and 0.368 ms at 8192; split22 attention ranks 0.174 / 0.278 ms, SSM ranks 0.262 / 0.262 ms. So the
+branch split is SSM-bound at short context and attention-bound at long context exactly as the byte model says,
+and the split wins because each rank carries one branch plus the MLP instead of both branches plus the MLP, on
+top of one fewer four-rank collective.
+
+**Swing MLP shards do not work in a synchronous layer.** With collectives removed, moving all swing columns to
+the attention ranks balances compute at context 512 (0.233 ms versus 0.263 ms neutral). With collectives present
+the mixer all-reduce is a barrier between the branch phase and the MLP phase, so the step is the sum of
+per-phase maxima: branch max + all-reduce + MLP max + all-reduce. Columns moved across that barrier only raise the
+MLP maximum. Both swing implementations confirmed it: the two-chain version cost extra small-GEMM overhead, the
+contiguous-pool version is overhead-free and still never beats the neutral split (section 22 table in
+`results/pilot/summary`). Hypothesis H3 as written is therefore rejected for single-micro-batch execution; it
+could only pay with two interleaved micro-batches, where the attention ranks fill their branch-phase slack with
+the other micro-batch's work.
+
+**What balancing must look like instead: move work within the mixer phase.** The attention ranks are idle while
+the SSM ranks finish the recurrence, so the balancing unit has to be a piece of the SSM branch that does not need
+the recurrence output, and symmetrically at long context a piece of the attention branch that does not need the
+SSM output:
+- Short context (SSM-bound): attention ranks compute the SSM gate projection z (1536 of the 3596 `in_proj` rows
+  per SSM rank, 9.4 MB of weights) and, if needed, the B/C/dt rows, and send the results point-to-point to their
+  SSM partner. z is consumed only at the gated norm, late in the branch, so the transfer (batch x 1536 x 2 bytes)
+  is off the critical path. This is the earlier SSM/gate split reborn as a balancing move rather than a static
+  layout.
+- Long context (attention-bound): SSM ranks hold the second half of their partner's KV positions and compute a
+  partial attention over them; the partner merges the two partials with the log-sum-exp trick (the DCP merge,
+  inside a pair). The transfer is one partial output plus one LSE per head.
+The split point then is "how many gate rows" at short context and "how many KV positions" at long context, both
+chosen per step from the same slack measurement, with no state migration.
