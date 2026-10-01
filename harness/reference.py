@@ -39,6 +39,7 @@ def decode_step(
     conv_state: torch.Tensor,  # [B, d_conv-1, conv_rows] previous conv inputs, oldest first
     ssm_state: torch.Tensor,  # [B, nh, p, N]
     pos: int,
+    intermediates: dict | None = None,
 ) -> torch.Tensor:
     dev = h.device
     f32 = lambda t: full[t].to(dev, torch.float32)  # noqa: E731
@@ -65,6 +66,8 @@ def decode_step(
     probs = torch.softmax(scores, -1)
     o = torch.einsum("bqk,bkqd->bqd", probs, Vq).reshape(B, nq * hd)
     attn = (o @ f32("self_attn.o_proj.weight").T) * dims.attn_out
+    if intermediates is not None:
+        intermediates.update(x=x, q=q, k=k, v=v, o=o, attn=attn)
 
     # ---- mamba branch
     xs = x * dims.ssm_in
@@ -101,6 +104,8 @@ def decode_step(
     yg = yg * torch.rsqrt(yg.pow(2).mean(-1, keepdim=True) + dims.rms_eps)
     y = yg.view(B, nh * p) * f32("mamba.norm.weight")
     ssm = (y @ f32("mamba.out_proj.weight").T) * dims.ssm_out
+    if intermediates is not None:
+        intermediates.update(zxbcdt=zxbcdt, conv=conv, y_ssm=y, ssm=ssm)
 
     h = h + attn + ssm
 
@@ -109,4 +114,6 @@ def decode_step(
     gate = F.silu((y2 @ f32("feed_forward.gate_proj.weight").T) * dims.mlp_mults[0])
     up = y2 @ f32("feed_forward.up_proj.weight").T
     mlp = ((gate * up) @ f32("feed_forward.down_proj.weight").T) * dims.mlp_mults[1]
+    if intermediates is not None:
+        intermediates.update(h1=h, y2=y2, mlp=mlp, out=h + mlp)
     return h + mlp
