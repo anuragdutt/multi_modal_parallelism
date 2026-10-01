@@ -19,12 +19,17 @@ def load_runs(raw_dir: str | Path) -> pd.DataFrame:
     return df
 
 
-def step_table(df: pd.DataFrame, variant: str) -> pd.DataFrame:
-    """Median over repeats of the max-over-ranks step time per (label, cuts_src, batch, ctx)."""
+def step_table(df: pd.DataFrame, variant: str, agg: str = "min") -> pd.DataFrame:
+    """Aggregate over repeats of the max-over-ranks step time per (label, cuts_src, batch, ctx).
+
+    Default is the minimum over repeats: the box is shared and foreign GPU load inflates some repeats, so the
+    least-contaminated repeat is the best estimate of the undisturbed step. `cov` flags cells where repeats
+    disagree (contamination or thermal drift)."""
     s = df[(df["op"] == "step_max") & (df["variant"] == variant)]
     g = s.groupby(["label", "mode", "S", "cuts_src", "batch", "ctx"], dropna=False)["median_ms"]
-    out = g.median().reset_index().rename(columns={"median_ms": "step_ms"})
+    out = (g.min() if agg == "min" else g.median()).reset_index().rename(columns={"median_ms": "step_ms"})
     out["cov"] = (g.std() / g.mean()).reset_index(drop=True)
+    out["n_rep"] = g.count().reset_index(drop=True)
     return out
 
 

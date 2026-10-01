@@ -123,10 +123,10 @@ def plot_pred_vs_meas(df: pd.DataFrame, figs: Path) -> None:
 def summarize(step_g: pd.DataFrame, df: pd.DataFrame, out: Path) -> None:
     lines = ["# Stage-1 summary", ""]
     tp4 = step_g[step_g["label"] == "tp4"].set_index(["batch", "ctx"])["step_ms"]
-    lines.append("## Speedup of each mode over tp4 (CUDA-graph variant, median over repeats)")
+    lines.append("## Speedup of each mode over tp4 (CUDA-graph variant, min over repeats; cells with CoV > 5% flagged *)")
     lines.append("")
-    lines.append("| batch | ctx | tp4 ms | tp4_fused | tp4_streams | split22 | swing best (S, cuts) | swing speedup |")
-    lines.append("|---|---|---|---|---|---|---|---|")
+    lines.append("| batch | ctx | tp4 ms | tp4_fused | tp4_streams | split22 | swing best (S, cuts) | swing speedup | max CoV |")
+    lines.append("|---|---|---|---|---|---|---|---|---|")
     bs = best_swing(step_g, None)
     for (B, c), t in tp4.sort_index().items():
         def sp(label: str) -> str:
@@ -136,7 +136,9 @@ def summarize(step_g: pd.DataFrame, df: pd.DataFrame, out: Path) -> None:
         b = bs[(bs["batch"] == B) & (bs["ctx"] == c)]
         bstr = f"S={b.iloc[0]['S']:.1f}, {b.iloc[0]['cuts_src']}" if len(b) else "-"
         bsp = f"{t / b.iloc[0]['step_ms']:.2f}x" if len(b) else "-"
-        lines.append(f"| {B} | {c} | {t:.3f} | {sp('tp4_fused')} | {sp('tp4_streams')} | {sp('split22')} | {bstr} | {bsp} |")
+        cv = step_g[(step_g["batch"] == B) & (step_g["ctx"] == c)]["cov"].max()
+        flag = "*" if cv > 0.05 else ""
+        lines.append(f"| {B} | {c} | {t:.3f}{flag} | {sp('tp4_fused')} | {sp('tp4_streams')} | {sp('split22')} | {bstr} | {bsp} | {cv:.2f} |")
     corr = Path(out.parent / "raw" / "correctness.csv")
     if corr.exists():
         c = pd.read_csv(corr)
