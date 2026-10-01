@@ -9,7 +9,6 @@ import torch.nn.functional as F
 
 try:
     from vllm import _custom_ops as ops
-    from vllm.model_executor.layers.activation import SiluAndMul
     from vllm.model_executor.layers.mamba.ops.causal_conv1d import causal_conv1d_update
     from vllm.model_executor.layers.mamba.ops.layernorm_gated import rms_norm_gated as _rms_norm_gated
     from vllm.model_executor.layers.mamba.ops.mamba_ssm import selective_state_update as _ssu
@@ -21,7 +20,6 @@ try:
 except ImportError:  # pragma: no cover
     from vllm.v1.attention.backends.fa_utils import flash_attn_varlen_func as _fa_varlen  # type: ignore
 
-_silu_and_mul = SiluAndMul()
 
 
 # ----------------------------------------------------------------------------- elementwise / norms
@@ -31,8 +29,12 @@ def rms_norm(x: torch.Tensor, w: torch.Tensor, eps: float, out: torch.Tensor) ->
 
 
 def silu_and_mul(x: torch.Tensor) -> torch.Tensor:
-    """x: [T, 2d] with [gate | up] halves -> silu(gate) * up, [T, d]."""
-    return _silu_and_mul(x)
+    """x: [T, 2d] with [gate | up] halves -> silu(gate) * up, [T, d]. Direct call of vLLM's compiled op
+    (the SiluAndMul CustomOp wrapper needs an engine config context, which the harness does not have)."""
+    d = x.shape[-1] // 2
+    out = torch.empty(x.shape[:-1] + (d,), dtype=x.dtype, device=x.device)
+    torch.ops._C.silu_and_mul(out, x)
+    return out
 
 
 def gated_rmsnorm(y: torch.Tensor, z: torch.Tensor, w: torch.Tensor, eps: float, group) -> torch.Tensor:
