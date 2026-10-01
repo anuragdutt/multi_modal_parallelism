@@ -16,8 +16,8 @@ from .config import FalconH1Dims, RunSpec
 from .correctness import compare, cross_rank_max_abs, passes
 from .dist import Groups, barrier_sync, describe_comm
 from .layer import ParallelHybridLayer
-from .model import BwTables, choose_cuts, predict_rank
-from .sharding import neutral_cuts, plan_for, swing_width, symmetric_cuts
+from .model import BwTables, choose_k, predict_rank
+from .sharding import neutral_k, plan_for, swing_width
 from .state import alloc_and_fill, full_states_for_reference, input_hidden, make_decode_ctx
 from .timing import OpTimer, time_eager, time_graph
 from .weights import shard_to_device
@@ -26,12 +26,12 @@ from .weights import shard_to_device
 def gpu_env(local_rank: int) -> dict:
     try:
         q = subprocess.run(
-            ["nvidia-smi", "--query-gpu=clocks.sm,temperature.gpu", "--format=csv,noheader,nounits", "-i", str(local_rank)],
+            ["nvidia-smi", "--query-gpu=clocks.sm,temperature.gpu,power.draw,utilization.gpu", "--format=csv,noheader,nounits", "-i", str(local_rank)],
             capture_output=True, text=True, timeout=5,
         ).stdout.strip().split(",")
-        return {"sm_clock_mhz": int(q[0]), "temp_c": int(q[1])}
+        return {"sm_clock_mhz": int(q[0]), "temp_c": int(q[1]), "power_w": float(q[2]), "util_pct": int(q[3])}
     except Exception:
-        return {"sm_clock_mhz": -1, "temp_c": -1}
+        return {"sm_clock_mhz": -1, "temp_c": -1, "power_w": -1.0, "util_pct": -1}
 
 
 def vllm_commit() -> str:
@@ -45,31 +45,28 @@ def vllm_commit() -> str:
         return "unknown"
 
 
-def resolve_cuts(spec: RunSpec, dims: FalconH1Dims, world: int, bw: BwTables | None) -> tuple[int, tuple[int, ...] | None, str]:
-    """Return (w, cuts, cuts_src) for a spec; 'model' needs a BwTables, otherwise falls back to neutral."""
+def resolve_k(spec: RunSpec, dims: FalconH1Dims, world: int, bw: BwTables | None) -> tuple[int, int | None, str]:
+    """Return (w, k, cuts_src) for a spec; 'model' needs a BwTables, otherwise falls back to neutral."""
     if spec.mode != "split22" or spec.swing <= 0:
         return 0, None, ""
     w = swing_width(spec.swing, dims.intermediate // world)
     src = spec.cuts_src
     if src == "neutral":
-        return w, neutral_cuts(w, world), "neutral"
+        return w, neutral_k(w), "neutral"
     if src == "model":
         if bw is None:
-            return w, neutral_cuts(w, world), "neutral(no-bw)"
-        cuts, _ = choose_cuts(dims, spec.batch, spec.ctx, spec.swing, bw, spec.variant if spec.variant != "both" else "graph", spec.kv_block)
-        return w, cuts, "model"
-    if src == "grid":
-        assert spec.cuts is not None and len(spec.cuts) == 1, "grid cuts spec = (n_attn,)"
-        return w, symmetric_cuts(w, spec.cuts[0], world), f"grid:{spec.cuts[0]}"
-    assert spec.cuts is not None
-    return w, tuple(spec.cuts), "manual"
+            return w, neutral_k(w), "neutral(no-bw)"
+        k, _ = choose_k(dims, spec.batch, spec.ctx, spec.swing, bw, "graph" if spec.variant != "eager" else "eager", spec.kv_block)
+        return w, k, "model"
+    assert spec.k is not None, "grid/manual needs k"
+    return w, int(spec.k), src
 
 
 def measure(spec: RunSpec, groups: Groups, dims: FalconH1Dims, full: dict[str, torch.Tensor], out_csv: str,
             correctness_csv: str, check: bool, bw: BwTables | None = None, image_tag: str = "") -> list[dict]:
     rank, world, device = groups.rank, groups.world_size, groups.device
-    w, cuts, cuts_src = resolve_cuts(spec, dims, world, bw)
-    plan = plan_for(spec.mode, rank, world, dims, spec.swing, cuts)
+    w, k, cuts_src = resolve_k(spec, dims, world, bw)
+    plan = plan_for(spec.mode, rank, world, dims, spec.swing, k)
     rw = shard_to_device(full, plan, dims, device)
     ctx = make_decode_ctx(spec.batch, spec.ctx, spec.kv_block, device)
     st = alloc_and_fill(plan, dims, ctx, spec.seed, device)
@@ -80,7 +77,7 @@ def measure(spec: RunSpec, groups: Groups, dims: FalconH1Dims, full: dict[str, t
     run_id = uuid.uuid4().hex[:8]
     ts = time.strftime("%Y-%m-%dT%H:%M:%S")
     base = dict(run_id=run_id, ts=ts, image_tag=image_tag, vllm_commit=vllm_commit(), mode=spec.mode, S=spec.swing,
-                w=w, cuts=",".join(map(str, cuts)) if cuts else "", cuts_src=cuts_src, batch=spec.batch, ctx=spec.ctx,
+                w=w, cuts=(k if k is not None else ""), cuts_src=cuts_src, batch=spec.batch, ctx=spec.ctx,
                 kv_block=spec.kv_block, comm_tp=json.dumps(describe_comm(groups.tp)),
                 comm_pair=json.dumps(describe_comm(groups.pair)), tag=spec.tag)
 

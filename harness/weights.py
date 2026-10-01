@@ -87,13 +87,12 @@ class RankWeights:
     norm_w: torch.Tensor | None = None  # [nhr*p]
     wout: torch.Tensor | None = None  # [H, nhr*p]
     mup: torch.Tensor | None = None  # [1, in rows] bf16
-    # mlp
-    gate_up_fixed: torch.Tensor | None = None  # [2*nf, H] rows [gate | up]
-    down_fixed: torch.Tensor | None = None  # [H, nf]
-    gate_up_swing: torch.Tensor | None = None  # [2*W, H] rows [gate W_0..W_3 | up W_0..W_3]
-    down_swing_T: torch.Tensor | None = None  # [W, H]
+    # mlp pool, row r of each matrix is global intermediate column col_order[r]
+    mlp_gate: torch.Tensor | None = None  # [n_fixed + 2w, H]
+    mlp_up: torch.Tensor | None = None  # [n_fixed + 2w, H]
+    mlp_downT: torch.Tensor | None = None  # [n_fixed + 2w, H] (down_proj columns, transposed)
     n_fixed: int = 0
-    n_swing_total: int = 0
+    n_pool: int = 0
     # norms
     in_norm: torch.Tensor | None = None
     ff_norm: torch.Tensor | None = None
@@ -105,8 +104,7 @@ class RankWeights:
         return {
             "attn": nb(self.wqkv) + nb(self.wo),
             "mamba": nb(self.win) + nb(self.conv_w) + nb(self.conv_b) + nb(self.wout) + nb(self.norm_w),
-            "mlp_fixed": nb(self.gate_up_fixed) + nb(self.down_fixed),
-            "mlp_swing": nb(self.gate_up_swing) + nb(self.down_swing_T),
+            "mlp_pool": nb(self.mlp_gate) + nb(self.mlp_up) + nb(self.mlp_downT),
         }
 
 
@@ -138,16 +136,12 @@ def shard_to_device(full: dict[str, torch.Tensor], plan: RankPlan, dims: FalconH
         rw.mup = build_mup_vector(dims, s).to(device, bf)
     m = plan.mlp
     gp, up, dp = full["feed_forward.gate_proj.weight"], full["feed_forward.up_proj.weight"], full["feed_forward.down_proj.weight"]
-    f = m.fixed_cols
-    rw.gate_up_fixed = torch.cat([gp[f], up[f]], 0).to(device, bf).contiguous()
-    rw.down_fixed = dp[:, f].to(device, bf).contiguous()
-    rw.n_fixed = f.stop - f.start
-    if m.w > 0:
-        g_rows = torch.cat([gp[p] for p in m.swing_pieces], 0)
-        u_rows = torch.cat([up[p] for p in m.swing_pieces], 0)
-        rw.gate_up_swing = torch.cat([g_rows, u_rows], 0).to(device, bf).contiguous()
-        rw.down_swing_T = torch.cat([dp[:, p].T for p in m.swing_pieces], 0).to(device, bf).contiguous()
-        rw.n_swing_total = m.w * m.group_size
+    idx = torch.tensor(m.col_order, dtype=torch.long)
+    rw.mlp_gate = gp[idx].to(device, bf).contiguous()
+    rw.mlp_up = up[idx].to(device, bf).contiguous()
+    rw.mlp_downT = dp[:, idx].T.to(device, bf).contiguous()
+    rw.n_fixed = m.n_fixed
+    rw.n_pool = len(m.col_order)
     rw.in_norm = full["input_layernorm.weight"].to(device, bf).contiguous()
     rw.ff_norm = full["pre_ff_layernorm.weight"].to(device, bf).contiguous()
     return rw

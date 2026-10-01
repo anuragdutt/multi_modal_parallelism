@@ -2,8 +2,7 @@ import pytest
 
 from harness.config import FalconH1Dims
 from harness.sharding import (
-    attn_shard, build_mup_vector, kv_replication_map, mlp_shard, neutral_cuts, plan_for, ssm_shard,
-    swing_width, symmetric_cuts,
+    attn_shard, build_mup_vector, k_grid, kv_replication_map, mlp_shard, plan_for, ssm_shard, swing_width,
 )
 
 D7 = FalconH1Dims(
@@ -87,23 +86,25 @@ def test_mup_vector_matches_vllm_formula():
 def test_swing_bookkeeping():
     assert swing_width(0.1, 3072) == 320 and swing_width(0.4, 3072) == 1216 and swing_width(1.0, 3072) == 3072
     w = 640
-    plans = [mlp_shard(D7, r, 4, 0.2, None) for r in range(4)]
-    for r, m in enumerate(plans):
-        assert m.w == w and m.cuts == neutral_cuts(w, 4)
-        assert m.fixed_cols == slice(3072 * r, 3072 * (r + 1) - w)
-        assert m.swing_global_cols(*m.my_swing) == [slice(3072 * (r + 1) - w, 3072 * (r + 1))]
-        assert m.active_cols == 3072
-    cuts = symmetric_cuts(w, 128)
-    assert cuts == (0, 128, 256, 256 + 1152, 2560)
-    plans = [mlp_shard(D7, r, 4, 0.2, cuts) for r in range(4)]
-    assert plans[0].active_cols == 3072 - w + 128 and plans[2].active_cols == 3072 - w + 1152
-    # the four assigned ranges partition the swing space exactly once
-    cols = sorted(c for m in plans for g in m.swing_global_cols(*m.my_swing) for c in range(g.start, g.stop))
-    expected = sorted(c for p in plans[0].swing_pieces for c in range(p.start, p.stop))
-    assert cols == expected
-    # a range spanning three pieces maps to three global slices
-    assert plans[2].swing_global_cols(256, 256 + 1152) == [
-        slice(3072 - w + 256, 3072), slice(2 * 3072 - w, 2 * 3072), slice(3 * 3072 - w, 3 * 3072 - w + 128)]
+    # pair (0 attn, 2 ssm); neutral k = w reproduces plain TP exactly
+    a = mlp_shard(D7, 0, 4, 0.2, None, "attn", 2)
+    s = mlp_shard(D7, 2, 4, 0.2, None, "ssm", 0)
+    assert a.w == w and a.k == w and s.k == w
+    assert len(a.col_order) == 3072 - w + 2 * w == len(s.col_order)
+    assert sorted(a.active_global_cols()) == list(range(0, 3072))
+    assert sorted(s.active_global_cols()) == list(range(2 * 3072, 3 * 3072))
+    # any k partitions the pair's columns exactly once, and active rows are prefixes of the pool
+    pair_cols = set(range(0, 3072)) | set(range(2 * 3072, 3 * 3072))
+    for k in k_grid(w, 128):
+        a = mlp_shard(D7, 0, 4, 0.2, k, "attn", 2)
+        s = mlp_shard(D7, 2, 4, 0.2, k, "ssm", 0)
+        assert a.active_rows + s.active_rows == 2 * 3072
+        got = list(a.active_global_cols()) + list(s.active_global_cols())
+        assert len(got) == len(set(got)) and set(got) == pair_cols
+    assert k_grid(w, 128)[-1] == 2 * w
+    # tp modes have no pool
+    t = mlp_shard(D7, 1, 4, 0.0, None)
+    assert t.w == 0 and t.active_rows == 3072 and list(t.col_order) == list(range(3072, 6144))
 
 
 def test_plan_modes():
@@ -115,5 +116,6 @@ def test_plan_modes():
         p = plan_for("split22", r, 4, D7, swing=0.3)
         assert p.combine == "sum_then_allreduce"
         assert p.has_attn == (r < 2) and p.has_ssm == (r >= 2)
+        assert p.mlp.role == ("attn" if r < 2 else "ssm") and p.mlp.partner == (r + 2 if r < 2 else r - 2)
     with pytest.raises(ValueError):
         plan_for("tp4", 0, 4, D7, swing=0.2)

@@ -1,6 +1,6 @@
 """torchrun entry point: one (mode, swing, cuts, batch, ctx, variant) measurement, optional correctness check.
 
-  torchrun --standalone --nproc_per_node=4 -m harness.run --mode split22 --swing 0.2 --cuts neutral \
+  torchrun --standalone --nproc_per_node=4 -m harness.run --mode split22 --swing 0.2 --k neutral \
       --batch 16 --ctx 8192 --variant eager --check --out results/raw/dev.csv
 """
 from __future__ import annotations
@@ -44,7 +44,7 @@ def main() -> None:
     add_common_args(ap)
     ap.add_argument("--mode", required=True)
     ap.add_argument("--swing", type=float, default=0.0)
-    ap.add_argument("--cuts", default="neutral", help="neutral | model | sym:<n_attn> | c0,c1,c2,c3,c4")
+    ap.add_argument("--k", default="neutral", help="swing split point: neutral | model | <int in [0, 2w]>")
     ap.add_argument("--batch", type=int, default=1)
     ap.add_argument("--ctx", type=int, default=512)
     ap.add_argument("--variant", choices=["eager", "graph", "both"], default="eager")
@@ -55,13 +55,11 @@ def main() -> None:
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
 
-    if args.cuts in ("neutral", "model"):
-        cuts, src = None, args.cuts
-    elif args.cuts.startswith("sym:"):
-        cuts, src = (int(args.cuts[4:]),), "grid"
+    if args.k in ("neutral", "model"):
+        k, src = None, args.k
     else:
-        cuts, src = tuple(int(x) for x in args.cuts.split(",")), "manual"
-    spec = RunSpec(mode=args.mode, swing=args.swing, cuts=cuts, cuts_src=src, batch=args.batch, ctx=args.ctx,
+        k, src = int(args.k), "manual"
+    spec = RunSpec(mode=args.mode, swing=args.swing, k=k, cuts_src=src, batch=args.batch, ctx=args.ctx,
                    variant=args.variant, kv_block=args.kv_block, n_warm=args.n_warm, n_iter=args.n_iter,
                    repeats=args.repeats, layer_idx=args.layer_idx, seed=args.seed, tag=args.tag)
     groups = init_groups()

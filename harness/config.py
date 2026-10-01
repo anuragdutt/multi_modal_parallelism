@@ -89,7 +89,7 @@ class FalconH1Dims:
 class RunSpec:
     mode: str
     swing: float = 0.0
-    cuts: tuple[int, ...] | None = None  # None -> byte-model choice; neutral = (0, w, 2w, 3w, 4w)
+    k: int | None = None  # swing split point in [0, 2w]; None -> resolved from cuts_src
     cuts_src: str = "neutral"  # neutral | model | grid | manual
     batch: int = 1
     ctx: int = 512

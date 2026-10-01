@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import FalconH1Dims
-from .sharding import RankPlan, plan_for, swing_width, symmetric_cuts
+from .sharding import RankPlan, k_grid, plan_for, swing_width
 
 BF16 = 2
 LAUNCH_US = {"eager": 4.0, "graph": 1.0}
@@ -115,14 +115,10 @@ def bytes_per_op(plan: RankPlan, dims: FalconH1Dims, B: int, c: int) -> dict[str
         out["ssm.ssu"] = 2 * B * nhr * p * N * BF16 + 3 * B * nhr * p * BF16
         out["ssm.norm"] = 4 * B * nhr * p * BF16
         out["ssm.outproj"] = H * nhr * p * BF16
-    m = plan.mlp
-    nf = m.fixed_cols.stop - m.fixed_cols.start
-    a_, b_ = m.my_swing
-    out["mlp.gateup"] = 2 * nf * H * BF16
-    out["mlp.act"] = 3 * B * nf * BF16
-    out["mlp.down"] = H * nf * BF16
-    if b_ > a_:
-        out["mlp.swing"] = 3 * (b_ - a_) * H * BF16
+    n = plan.mlp.active_rows
+    out["mlp.gateup"] = 2 * n * H * BF16 + 2 * B * H * BF16
+    out["mlp.act"] = 3 * B * n * BF16
+    out["mlp.down"] = H * n * BF16
     return out
 
 
@@ -136,7 +132,7 @@ COLLECTIVES = {
 
 CLASS = {
     "attn.qkv": "gemv", "attn.oproj": "gemv", "ssm.inproj": "gemv", "ssm.outproj": "gemv",
-    "mlp.gateup": "gemv", "mlp.down": "gemv", "mlp.swing": "gemv",
+    "mlp.gateup": "gemv", "mlp.down": "gemv",
     "attn.fa": "attn", "ssm.ssu": "ssu", "ssm.conv": "conv",
 }
 
@@ -192,27 +188,26 @@ def predict_rank(plan: RankPlan, dims: FalconH1Dims, B: int, c: int, bw: BwTable
     return pred
 
 
-def predict_step(dims: FalconH1Dims, mode: str, S: float, cuts: tuple[int, ...] | None, B: int, c: int,
+def predict_step(dims: FalconH1Dims, mode: str, S: float, k: int | None, B: int, c: int,
                  bw: BwTables, variant: str, world: int = 4, kv_block: int = 16) -> tuple[float, list[float]]:
     per_rank = []
     for r in range(world):
-        plan = plan_for(mode, r, world, dims, S, cuts)
+        plan = plan_for(mode, r, world, dims, S, k)
         per_rank.append(predict_rank(plan, dims, B, c, bw, variant, kv_block)["step"])
     return max(per_rank), per_rank
 
 
-def choose_cuts(dims: FalconH1Dims, B: int, c: int, S: float, bw: BwTables, variant: str,
-                kv_block: int = 16, step: int = 128) -> tuple[tuple[int, ...], float]:
-    """Minimise the predicted max-rank step time over the symmetric cut family."""
+def choose_k(dims: FalconH1Dims, B: int, c: int, S: float, bw: BwTables, variant: str,
+             kv_block: int = 16, step: int = 128) -> tuple[int, float]:
+    """Minimise the predicted max-rank step time over the split point k."""
     w = swing_width(S, dims.intermediate // 4)
-    best, best_t = None, float("inf")
-    for n_a in range(0, 2 * w + 1, step):
-        cuts = symmetric_cuts(w, n_a)
-        t, _ = predict_step(dims, "split22", S, cuts, B, c, bw, variant, 4, kv_block)
+    best, best_t = w, float("inf")
+    for k in k_grid(w, step):
+        t, _ = predict_step(dims, "split22", S, k, B, c, bw, variant, 4, kv_block)
         if t < best_t:
-            best, best_t = cuts, t
+            best, best_t = k, t
     return best, best_t
 
 
-def total_hbm_bytes(dims: FalconH1Dims, mode: str, S: float, cuts: tuple[int, ...] | None, B: int, c: int, world: int = 4) -> int:
-    return sum(sum(bytes_per_op(plan_for(mode, r, world, dims, S, cuts), dims, B, c).values()) for r in range(world))
+def total_hbm_bytes(dims: FalconH1Dims, mode: str, S: float, k: int | None, B: int, c: int, world: int = 4) -> int:
+    return sum(sum(bytes_per_op(plan_for(mode, r, world, dims, S, k), dims, B, c).values()) for r in range(world))

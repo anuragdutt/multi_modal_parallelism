@@ -62,35 +62,36 @@ class SsmShard:
 
 @dataclass(frozen=True)
 class MlpShard:
-    base_cols: slice  # the rank's 1/world slice of the intermediate dim
-    fixed_cols: slice  # base minus its swing piece
-    w: int  # swing piece width (columns); 0 -> no swing
-    swing_pieces: tuple[slice, ...]  # global column ranges W_0..W_{world-1}
-    cuts: tuple[int, ...]  # (c_0=0 <= ... <= c_world = world*w) over the concatenated swing space
+    """MLP columns of this rank as ONE contiguous pool so the per-step assignment is a row count.
+
+    Each rank's base slice is split into a fixed part F (first n_fixed columns) and a swing piece W (last w).
+    The two ranks of an attention/SSM pair share the pool W_attn | W_ssm with a single split point k in [0, 2w]:
+    the attention rank computes F_a + the first k columns of the pool, the SSM rank computes F_s + the last 2w-k.
+    Row order: attention rank [F_a | W_a | W_s], SSM rank [F_s | rev(W_s) | rev(W_a)], so both are prefixes.
+    k = w is the neutral (plain TP) assignment; k > w moves work to the attention ranks, k < w to the SSM ranks.
+    """
+    base_cols: slice
+    n_fixed: int
+    w: int
+    k: int
+    role: str  # tp | attn | ssm
+    partner: int
+    col_order: tuple[int, ...]  # global intermediate column per pool row
     group_rank: int
     group_size: int
 
     @property
-    def my_swing(self) -> tuple[int, int]:
-        return self.cuts[self.group_rank], self.cuts[self.group_rank + 1]
-
-    def swing_global_cols(self, start: int, stop: int) -> list[slice]:
-        """Map a [start, stop) range of the concatenated swing space to global intermediate columns."""
-        out: list[slice] = []
-        w = self.w
-        t = start
-        while t < stop:
-            piece, off = divmod(t, w)
-            n = min(stop - t, w - off)
-            g = self.swing_pieces[piece]
-            out.append(slice(g.start + off, g.start + off + n))
-            t += n
-        return out
+    def active_rows(self) -> int:
+        if self.w == 0:
+            return self.n_fixed
+        return self.n_fixed + (self.k if self.role == "attn" else 2 * self.w - self.k)
 
     @property
     def active_cols(self) -> int:
-        a, b = self.my_swing
-        return (self.fixed_cols.stop - self.fixed_cols.start) + (b - a)
+        return self.active_rows
+
+    def active_global_cols(self) -> tuple[int, ...]:
+        return self.col_order[: self.active_rows]
 
 
 @dataclass(frozen=True)
@@ -203,38 +204,38 @@ def swing_width(S: float, cols_per_rank: int, granule: int = SWING_GRANULE) -> i
     return max(granule, min(w, cols_per_rank))
 
 
-def neutral_cuts(w: int, world: int) -> tuple[int, ...]:
-    return tuple(w * r for r in range(world + 1))
+def neutral_k(w: int) -> int:
+    return w
 
 
-def symmetric_cuts(w: int, n_attn: int, world: int = 4) -> tuple[int, ...]:
-    """Attention ranks (0,1) each take n_attn swing columns, SSM ranks (2,3) take the rest, evenly."""
-    _check(world == 4, "symmetric_cuts assumes 2+2")
-    _check(0 <= n_attn <= 2 * w, f"n_attn {n_attn} outside [0, {2 * w}]")
-    rest = 4 * w - 2 * n_attn
-    return (0, n_attn, 2 * n_attn, 2 * n_attn + rest // 2, 4 * w)
+def k_grid(w: int, step: int = 128) -> list[int]:
+    return list(range(0, 2 * w + 1, step)) if w > 0 else [0]
 
 
-def mlp_shard(dims: FalconH1Dims, rank: int, world: int, swing: float, cuts: tuple[int, ...] | None) -> MlpShard:
+def mlp_shard(dims: FalconH1Dims, rank: int, world: int, swing: float, k: int | None,
+              role: str = "tp", partner: int = -1) -> MlpShard:
     _check(dims.intermediate % world == 0, "intermediate not divisible by world")
     cpr = dims.intermediate // world
     base = slice(rank * cpr, (rank + 1) * cpr)
-    w = swing_width(swing, cpr) if world > 1 else 0
-    pieces = tuple(slice((r + 1) * cpr - w, (r + 1) * cpr) for r in range(world))
-    if cuts is None:
-        cuts = neutral_cuts(w, world)
-    _check(len(cuts) == world + 1 and cuts[0] == 0 and cuts[-1] == world * w, f"bad cuts {cuts} for w={w}")
-    _check(all(cuts[i] <= cuts[i + 1] for i in range(world)), f"cuts not monotone: {cuts}")
-    _check(all(c % SWING_GRANULE == 0 for c in cuts) or w == 0, f"cuts must be multiples of {SWING_GRANULE}")
-    return MlpShard(
-        base_cols=base,
-        fixed_cols=slice(base.start, base.stop - w),
-        w=w,
-        swing_pieces=pieces,
-        cuts=tuple(cuts),
-        group_rank=rank,
-        group_size=world,
-    )
+    w = swing_width(swing, cpr) if (world > 1 and role != "tp") else 0
+    nf = cpr - w
+    fixed = list(range(base.start, base.start + nf))
+    if w == 0:
+        return MlpShard(base_cols=base, n_fixed=nf, w=0, k=0, role="tp", partner=-1,
+                        col_order=tuple(fixed), group_rank=rank, group_size=world)
+    _check(role in ("attn", "ssm") and 0 <= partner < world, f"bad role/partner {role}/{partner}")
+    if k is None:
+        k = neutral_k(w)
+    _check(0 <= k <= 2 * w and k % SWING_GRANULE == 0, f"k={k} must be a multiple of {SWING_GRANULE} in [0, {2 * w}]")
+    w_self = list(range(base.start + nf, base.stop))
+    pb = partner * cpr
+    w_part = list(range(pb + nf, pb + cpr))
+    if role == "attn":
+        order = fixed + w_self + w_part
+    else:
+        order = fixed + w_self[::-1] + w_part[::-1]
+    return MlpShard(base_cols=base, n_fixed=nf, w=w, k=k, role=role, partner=partner,
+                    col_order=tuple(order), group_rank=rank, group_size=world)
 
 
 def plan_for(
@@ -243,7 +244,7 @@ def plan_for(
     world: int,
     dims: FalconH1Dims,
     swing: float = 0.0,
-    cuts: tuple[int, ...] | None = None,
+    k: int | None = None,
 ) -> RankPlan:
     all_ranks = tuple(range(world))
     if mode == "tp1":
@@ -269,11 +270,13 @@ def plan_for(
         _check(world == 4, "split22 needs world size 4")
         attn_ranks, ssm_ranks = (0, 1), (2, 3)
         is_attn = rank in attn_ranks
+        role = "attn" if is_attn else "ssm"
+        partner = rank + 2 if is_attn else rank - 2
         return RankPlan(
             mode=mode, rank=rank, world=world,
             attn=attn_shard(dims, rank, 2) if is_attn else None,
             ssm=None if is_attn else ssm_shard(dims, rank - 2, 2, ssm_ranks),
-            mlp=mlp_shard(dims, rank, world, swing, cuts),
+            mlp=mlp_shard(dims, rank, world, swing, k, role, partner),
             attn_ranks=attn_ranks, ssm_ranks=ssm_ranks, combine="sum_then_allreduce",
         )
     raise ValueError(f"unknown mode {mode}")

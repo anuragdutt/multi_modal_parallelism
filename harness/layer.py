@@ -104,43 +104,36 @@ class SsmBranch:
 
 
 class SwingMLP:
+    """One contiguous GEMM chain per rank; the per-step assignment only changes the active row count."""
+
     def __init__(self, plan: RankPlan, w: RankWeights, dims: FalconH1Dims):
         self.plan, self.w, self.dims = plan, w, dims
-        self.cuts = plan.mlp.cuts
-        self.rank = plan.mlp.group_rank
+        self.m = plan.mlp
+        self.k = plan.mlp.k
         self.gm, self.dm = dims.mlp_mults
 
-    def set_cuts(self, cuts: tuple[int, ...]) -> None:
-        self.cuts = tuple(cuts)
+    def set_k(self, k: int) -> None:
+        self.k = k
 
     @property
-    def my_swing(self) -> tuple[int, int]:
-        return self.cuts[self.rank], self.cuts[self.rank + 1]
+    def n_active(self) -> int:
+        m = self.m
+        if m.w == 0:
+            return m.n_fixed
+        return m.n_fixed + (self.k if m.role == "attn" else 2 * m.w - self.k)
 
     def forward(self, y: torch.Tensor, t: OpTimer) -> torch.Tensor:
-        w = self.w
-        if w.n_fixed > 0:
-            t.begin("mlp.gateup")
-            gu = K.gemm(y, w.gate_up_fixed)
-            gu[:, : w.n_fixed] *= self.gm
-            t.end("mlp.gateup")
-            t.begin("mlp.act")
-            h = K.silu_and_mul(gu)
-            t.end("mlp.act")
-            t.begin("mlp.down")
-            part = K.gemm(h, w.down_fixed)
-            t.end("mlp.down")
-        else:  # S = 1.0: the whole MLP slice is swing
-            part = torch.zeros(y.shape[0], self.dims.hidden, device=y.device, dtype=y.dtype)
-        a, b = self.my_swing
-        if b > a and w.gate_up_swing is not None:
-            W = w.n_swing_total
-            t.begin("mlp.swing")
-            g = K.gemm(y, w.gate_up_swing[a:b])
-            u = K.gemm(y, w.gate_up_swing[W + a : W + b])
-            hs = F.silu(g * self.gm) * u
-            part = part + K.gemm_T(hs, w.down_swing_T[a:b])
-            t.end("mlp.swing")
+        w, n = self.w, self.n_active
+        t.begin("mlp.gateup")
+        g = K.gemm(y, w.mlp_gate[:n])
+        u = K.gemm(y, w.mlp_up[:n])
+        t.end("mlp.gateup")
+        t.begin("mlp.act")
+        h = F.silu(g * self.gm) * u
+        t.end("mlp.act")
+        t.begin("mlp.down")
+        part = K.gemm_T(h, w.mlp_downT[:n])
+        t.end("mlp.down")
         return part * self.dm
 
 

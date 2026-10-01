@@ -17,7 +17,7 @@ from .dist import barrier_sync, destroy, init_groups
 from .measure import measure
 from .model import BwTables
 from .run import add_common_args, load_dims_and_weights
-from .sharding import swing_width
+from .sharding import k_grid, swing_width
 
 
 def expand(cfg: dict) -> list[RunSpec]:
@@ -35,9 +35,8 @@ def expand(cfg: dict) -> list[RunSpec]:
         for b, c in cells:
             for src in cfg.get("cut_sources", ["neutral", "model"]):
                 specs.append(RunSpec(mode="split22", swing=S, cuts_src=src, batch=b, ctx=c, **base))
-            step = cfg.get("grid_step", 128)
-            for n_a in range(0, 2 * w + 1, step):
-                specs.append(RunSpec(mode="split22", swing=S, cuts=(n_a,), cuts_src="grid", batch=b, ctx=c, **base))
+            for k in k_grid(w, cfg.get("grid_step", 128)):
+                specs.append(RunSpec(mode="split22", swing=S, k=k, cuts_src="grid", batch=b, ctx=c, **base))
     return specs
 
 

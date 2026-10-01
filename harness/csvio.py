@@ -8,7 +8,7 @@ from pathlib import Path
 RUN_COLUMNS = [
     "run_id", "ts", "image_tag", "vllm_commit", "mode", "S", "w", "cuts", "cuts_src", "batch", "ctx", "kv_block",
     "variant", "repeat", "rank", "op", "n", "median_ms", "p10_ms", "p90_ms", "mean_ms", "bytes_pred", "ms_pred",
-    "comm_tp", "comm_pair", "sm_clock_mhz", "temp_c", "tag",
+    "comm_tp", "comm_pair", "sm_clock_mhz", "temp_c", "power_w", "util_pct", "tag",
 ]
 CORRECTNESS_COLUMNS = [
     "run_id", "ts", "mode", "S", "cuts", "batch", "ctx", "ref", "max_abs", "max_rel", "mean_rel", "cos",
