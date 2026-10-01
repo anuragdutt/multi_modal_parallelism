@@ -951,3 +951,35 @@ implementation exists for the model, and TII's vLLM fork.
 - Downloading `tiiuae/Falcon-H1-7B-Instruct` (15.2 GB) into the NFS HF cache.
 - Any `docker system prune`.
 - Timing runs, which need the GPU 0 user to be done.
+
+---
+
+## 21. Execution log and deviations (2026-10-01)
+
+Facts discovered while building the infrastructure, all now reflected in the code:
+
+- vLLM v0.30.0 ships its core ops as `vllm/_C_stable_libtorch.abi3.so` loaded through `torch.ops`; there is no
+  `vllm._C` module. FlashAttention can only be imported with a GPU present, so the Docker build verifies by file
+  presence and the GPU checks live in `scripts/smoke_test.sh`. The image no longer ships its wheel, so the editable
+  tree receives the compiled extensions copied from the installed package (Dockerfile step 3) and the Python
+  package is installed with `VLLM_TARGET_DEVICE=empty`.
+- `initialize_model_parallel` and vLLM CustomOps require an engine config context in v0.30.0; the harness enters a
+  default `VllmConfig` for the process lifetime (`harness/dist.py: ensure_vllm_config`) and calls the compiled
+  `silu_and_mul` op directly.
+- The FlashAttention backend stores the paged cache as `(blocks, kv_heads, block_size, 2*head_dim)` and derives
+  strided key and value views; `harness/kernels.py` mirrors that layout.
+- vLLM's Mamba kernels treat state line 0 as the null block (`null_block_id`), so harness state indices run 1..B
+  and buffers have B+1 lines.
+- On this box vLLM's custom all-reduce is disabled for both the 4-rank and the 2-rank groups; all collectives go
+  through pynccl (NCCL 2.30.7). The harness logs this per group.
+- The NFS home squashes root, so the container runs as the host user (`docker/run.sh`), with `HOME` inside the repo
+  for Triton caches and the HF cache mounted at `/hf`.
+- The backup of the old container dropped the `docker commit` step (its writable layer is 289 GB); the patch,
+  bundle, untracked tarball and a full copy of `/vllm` are in `/home/adutt/backups/vllm-mamba-sg-2026-10-01`.
+- Model: `tiiuae/Falcon-H1-7B-Instruct` snapshot `41e72f27`; `rope_theta` is 1e11.
+- Correctness: every mode (tp1, tp4, tp4_fused, tp4_streams, split22, split22 with swing S in {0.2, 1.0}, neutral
+  and grid cuts) matches the fp32 reference with mean relative error 0.7 to 0.9 percent and cosine 0.99997, and
+  ranks hold bitwise-identical outputs. Per-stage errors are 2 to 3e-3, so the end-to-end tolerance is 1.5e-2.
+- CUDA-graph capture works for all modes with the collectives inside. At batch 4, context 2048 the captured step is
+  0.31 ms versus 1.9 ms eager, so eager is launch-bound and the graph variant carries the headline numbers; the byte
+  model prefers graph-captured kernel curves.
