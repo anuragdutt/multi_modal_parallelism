@@ -66,13 +66,17 @@ def apply_rope(positions: torch.Tensor, q: torch.Tensor, k: torch.Tensor, head_d
 
 # ----------------------------------------------------------------------------- attention (paged FA2)
 def kv_cache_layout(num_blocks: int, block: int, nkv: int, hd: int) -> tuple[tuple[int, ...], str]:
-    """Mirror vLLM's FlashAttention backend cache shape; returns (shape, kind)."""
+    """Mirror vLLM's FlashAttention backend cache layout; returns (shape, kind).
+
+    v0.30.0 stores (num_blocks, num_kv_heads, block_size, 2*head_dim) and derives
+    key_cache, value_cache = kv.transpose(1, 2).split(head_dim, -1) (flash_attn.py:1233). Older releases
+    exposed get_kv_cache_shape with a stacked (2, nb, bs, nkv, hd) layout; both are handled."""
     try:
         from vllm.v1.attention.backends.flash_attn import FlashAttentionBackend
 
-        shape = tuple(FlashAttentionBackend.get_kv_cache_shape(num_blocks, block, nkv, hd))
+        shape = tuple(FlashAttentionBackend.get_kv_cache_shape(num_blocks, block, nkv, hd))  # type: ignore[attr-defined]
     except Exception:
-        shape = (2, num_blocks, block, nkv, hd)
+        shape = (num_blocks, nkv, block, 2 * hd)
     if shape[0] == 2 and len(shape) == 5:
         return shape, "stacked"  # (2, nb, bs, nkv, hd): key, value = kv.unbind(0)
     if len(shape) == 4 and shape[-1] == 2 * hd:

@@ -14,8 +14,8 @@ assert fa.FA2_AVAILABLE, "FA2 extension missing"
 from vllm.model_executor.layers.mamba.ops.mamba_ssm import selective_state_update
 from vllm.model_executor.layers.mamba.ops.causal_conv1d import causal_conv1d_update
 from vllm.model_executor.layers.mamba.ops.layernorm_gated import rms_norm_gated
-from vllm.v1.attention.backends.flash_attn import FlashAttentionBackend
-print("kv cache shape (nb=2, bs=16, nkv=1, hd=128):", FlashAttentionBackend.get_kv_cache_shape(2, 16, 1, 128))
+from harness import kernels as HK
+print("kv cache layout (nb=2, bs=16, nkv=1, hd=128):", HK.kv_cache_layout(2, 16, 1, 128))
 import inspect
 print("flash_attn_varlen_func:", inspect.signature(fa.flash_attn_varlen_func))
 # tiny kernel calls
