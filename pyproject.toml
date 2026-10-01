@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mmp"
+version = "0.1.0"
+description = "Elastic mixer parallelism experiments: 4-rank layer harness on vLLM kernels"
+requires-python = ">=3.10"
+dependencies = ["numpy", "pandas", "pyyaml", "safetensors", "rich"]
+
+[tool.setuptools]
+packages = ["harness", "analysis"]
+
+[tool.pytest.ini_options]
+markers = ["gpu4: requires 4 GPUs and torchrun"]

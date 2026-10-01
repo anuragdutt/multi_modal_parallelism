@@ -48,3 +48,7 @@ docker/.env
 
 # Notebook checkpoints
 .ipynb_checkpoints/
+
+# Saved docker images (kept locally only; directory structure is tracked via .gitkeep)
+docker/images/*
+!docker/images/.gitkeep
