@@ -124,10 +124,11 @@ def measure(spec: RunSpec, groups: Groups, dims: FalconH1Dims, full: dict[str, t
             else:
                 stats, wall = time_graph(layer, h, spec.n_warm, spec.n_iter, groups)
                 p = pred_g
+            rep_id = rep + spec.repeat_offset
             for op, s in stats.items():
-                rows.append(dict(base, variant=variant, repeat=rep, rank=rank, op=op, **s, **env,
+                rows.append(dict(base, variant=variant, repeat=rep_id, rank=rank, op=op, **s, **env,
                                  ms_pred=p.get(op, ""), bytes_pred=""))
-            rows.append(dict(base, variant=variant, repeat=rep, rank=rank, op="step_wall", n=spec.n_iter,
+            rows.append(dict(base, variant=variant, repeat=rep_id, rank=rank, op="step_wall", n=spec.n_iter,
                              median_ms=wall, p10_ms=wall, p90_ms=wall, mean_ms=wall, **env))
             barrier_sync()
     gathered: list = [None] * world
@@ -139,7 +140,7 @@ def measure(spec: RunSpec, groups: Groups, dims: FalconH1Dims, full: dict[str, t
     if rank == 0:
         all_rows = [r for rr in gathered for r in rr]
         for variant in variants:
-            for rep in range(spec.repeats):
+            for rep in range(spec.repeat_offset, spec.repeat_offset + spec.repeats):
                 steps = [r for r in all_rows if r["op"] == "step" and r["variant"] == variant and r["repeat"] == rep]
                 walls = [r for r in all_rows if r["op"] == "step_wall" and r["variant"] == variant and r["repeat"] == rep]
                 if steps:
@@ -149,7 +150,7 @@ def measure(spec: RunSpec, groups: Groups, dims: FalconH1Dims, full: dict[str, t
         csvio.append_rows(out_csv, csvio.RUN_COLUMNS, all_rows)
         for variant in variants:
             sm = [r for r in all_rows if r["op"] == "step_max" and r["variant"] == variant]
-            per = [round(r["median_ms"], 3) for r in all_rows if r["op"] == "step" and r["variant"] == variant and r["repeat"] == 0]
+            per = [round(r["median_ms"], 3) for r in all_rows if r["op"] == "step" and r["variant"] == variant and r["repeat"] == spec.repeat_offset]
             if sm:
                 print(f"[time] mode={spec.mode} S={spec.swing} cuts={cuts_src or '-'} B={spec.batch} c={spec.ctx} "
                       f"variant={variant} step_max={min(r['median_ms'] for r in sm):.3f} ms per-rank={per}", flush=True)

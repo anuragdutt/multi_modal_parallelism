@@ -60,7 +60,7 @@ def main() -> None:
     done = 0
     for rep in range(repeats):
         for spec in specs:
-            spec_r = RunSpec(**{**spec.__dict__, "tag": f"rep{rep}"})
+            spec_r = RunSpec(**{**spec.__dict__, "tag": f"rep{rep}", "repeat_offset": rep})
             try:
                 measure(spec_r, groups, dims, full, args.out, args.correctness_out, args.check and rep == 0, bw,
                         os.environ.get("MMP_IMAGE_TAG", ""))

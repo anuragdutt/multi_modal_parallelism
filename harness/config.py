@@ -98,6 +98,7 @@ class RunSpec:
     n_warm: int = 20
     n_iter: int = 100
     repeats: int = 3
+    repeat_offset: int = 0  # sweep.py sets this so outer repeats get distinct 'repeat' values
     layer_idx: int = 0
     seed: int = 0
     tag: str = ""
