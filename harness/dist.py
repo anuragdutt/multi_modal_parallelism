@@ -32,6 +32,24 @@ class Groups:
         raise ValueError(f"no communicator for ranks {ranks}")
 
 
+_CONFIG_STACK = None
+
+
+def ensure_vllm_config(world: int) -> None:
+    """vLLM >= 0.30 reads the current engine config inside initialize_model_parallel and in CustomOps.
+    Enter a default config for the lifetime of the process (what vLLM's own tests do via a fixture)."""
+    global _CONFIG_STACK
+    if _CONFIG_STACK is not None:
+        return
+    from contextlib import ExitStack
+
+    from vllm.config import ParallelConfig, VllmConfig, set_current_vllm_config
+
+    cfg = VllmConfig(parallel_config=ParallelConfig(tensor_parallel_size=world))
+    _CONFIG_STACK = ExitStack()
+    _CONFIG_STACK.enter_context(set_current_vllm_config(cfg))
+
+
 def init_groups() -> Groups:
     from vllm.distributed import parallel_state as ps
 
@@ -40,6 +58,7 @@ def init_groups() -> Groups:
     world = int(os.environ.get("WORLD_SIZE", "1"))
     torch.cuda.set_device(local_rank)
     device = torch.device("cuda", local_rank)
+    ensure_vllm_config(world)
     ps.init_distributed_environment(world_size=world, rank=rank, distributed_init_method="env://",
                                     local_rank=local_rank, backend="nccl")
     ps.initialize_model_parallel(tensor_model_parallel_size=world)
