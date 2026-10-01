@@ -71,17 +71,17 @@ def measure(spec: RunSpec, groups: Groups, dims: FalconH1Dims, full: dict[str, t
     ctx = make_decode_ctx(spec.batch, spec.ctx, spec.kv_block, device)
     st = alloc_and_fill(plan, dims, ctx, spec.seed, device)
     h = input_hidden(spec.seed, spec.batch, dims.hidden, device)
-    layer = ParallelHybridLayer(plan, rw, dims, groups, st, ctx, device)
+    layer = ParallelHybridLayer(plan, rw, dims, groups, st, ctx, device, collectives=spec.collectives)
     barrier_sync()
 
     run_id = uuid.uuid4().hex[:8]
     ts = time.strftime("%Y-%m-%dT%H:%M:%S")
     base = dict(run_id=run_id, ts=ts, image_tag=image_tag, vllm_commit=vllm_commit(), mode=spec.mode, S=spec.swing,
                 w=w, cuts=(k if k is not None else ""), cuts_src=cuts_src, batch=spec.batch, ctx=spec.ctx,
-                kv_block=spec.kv_block, comm_tp=json.dumps(describe_comm(groups.tp)),
+                kv_block=spec.kv_block, comm_tp=json.dumps(describe_comm(groups.tp)) if spec.collectives else "none",
                 comm_pair=json.dumps(describe_comm(groups.pair)), tag=spec.tag)
 
-    if check:
+    if check and spec.collectives:
         out = layer.step(h, OpTimer(enabled=False)).clone()
         torch.cuda.synchronize()
         xr = cross_rank_max_abs(out, world)

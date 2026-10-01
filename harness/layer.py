@@ -137,14 +137,27 @@ class SwingMLP:
         return part * self.dm
 
 
+class _LocalOnly:
+    """Stands in for a GroupCoordinator in the no-collectives diagnostic: keeps the native norm path."""
+
+    def __init__(self, world_size: int):
+        self.world_size = world_size
+
+    def all_reduce(self, x: torch.Tensor) -> torch.Tensor:
+        return x * self.world_size
+
+
 class ParallelHybridLayer:
     def __init__(self, plan: RankPlan, w: RankWeights, dims: FalconH1Dims, groups: Groups, st: RankStates,
-                 ctx: DecodeCtx, device: torch.device):
+                 ctx: DecodeCtx, device: torch.device, collectives: bool = True):
         self.plan, self.w, self.dims, self.groups, self.ctx = plan, w, dims, groups, ctx
+        self.collectives = collectives
         self.device = device
         self.B, self.H = ctx.B, dims.hidden
         self.attn = AttentionBranch(plan, w, dims, st, ctx, device) if plan.attn is not None else None
-        norm_group = groups.group_for_ranks(plan.ssm.norm_ranks) if plan.ssm is not None else None
+        norm_group = groups.group_for_ranks(plan.ssm.norm_ranks) if (plan.ssm is not None and collectives) else None
+        if plan.ssm is not None and not collectives and len(plan.ssm.norm_ranks) > 1:
+            norm_group = _LocalOnly(len(plan.ssm.norm_ranks))  # diagnostic: same arithmetic path, no reduction
         self.ssm = SsmBranch(plan, w, dims, st, ctx, device, norm_group) if plan.ssm is not None else None
         self.mlp = SwingMLP(plan, w, dims)
         self.xn = torch.empty(ctx.B, dims.hidden, device=device, dtype=torch.bfloat16)
@@ -157,7 +170,7 @@ class ParallelHybridLayer:
             self.s_ssm = torch.cuda.Stream(device=device)
 
     def _ar(self, x: torch.Tensor, name: str, t: OpTimer) -> torch.Tensor:
-        if self.groups.world_size == 1:
+        if self.groups.world_size == 1 or not self.collectives:
             return x
         t.begin(name)
         y = self.tp.all_reduce(x)

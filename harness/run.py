@@ -53,6 +53,7 @@ def main() -> None:
     ap.add_argument("--n-iter", type=int, default=100)
     ap.add_argument("--repeats", type=int, default=1)
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--no-collectives", action="store_true", help="diagnostic: per-rank compute only (outputs wrong)")
     args = ap.parse_args()
 
     if args.k in ("neutral", "model"):
@@ -61,7 +62,8 @@ def main() -> None:
         k, src = int(args.k), "manual"
     spec = RunSpec(mode=args.mode, swing=args.swing, k=k, cuts_src=src, batch=args.batch, ctx=args.ctx,
                    variant=args.variant, kv_block=args.kv_block, n_warm=args.n_warm, n_iter=args.n_iter,
-                   repeats=args.repeats, layer_idx=args.layer_idx, seed=args.seed, tag=args.tag)
+                   repeats=args.repeats, layer_idx=args.layer_idx, seed=args.seed, tag=args.tag,
+                   collectives=not args.no_collectives)
     groups = init_groups()
     dims, full = load_dims_and_weights(args)
     bw = BwTables.from_csv(args.bw) if os.path.exists(args.bw) else None
