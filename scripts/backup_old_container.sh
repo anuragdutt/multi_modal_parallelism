@@ -13,5 +13,5 @@ for f in status.txt uncommitted.patch local-commits.bundle untracked.tgz head.tx
 done
 docker cp vllm-mamba-sg:/vllm "$B/vllm"
 ( cd "$B" && sha256sum uncommitted.patch local-commits.bundle untracked.tgz > SHA256SUMS )
-git bundle verify "$B/local-commits.bundle"
+git -C /home/adutt/masarani/vllm bundle verify "$B/local-commits.bundle"
 echo "backup complete in $B"; du -sh "$B"
