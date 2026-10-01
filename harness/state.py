@@ -24,7 +24,7 @@ class DecodeCtx:
     seqused_k: torch.Tensor  # [B] int32 = c+1
     block_table: torch.Tensor  # [B, nblk] int32
     slot_mapping: torch.Tensor  # [B] int64
-    state_idx: torch.Tensor  # [B] int32
+    state_idx: torch.Tensor  # [B] int32, values 1..B (line 0 is the null block)
     max_k: int
 
 
@@ -38,7 +38,7 @@ def make_decode_ctx(B: int, c: int, kv_block: int, device: torch.device) -> Deco
         cu_q=torch.arange(B + 1, device=device, dtype=torch.int32),
         seqused_k=torch.full((B,), c + 1, device=device, dtype=torch.int32),
         block_table=bt, slot_mapping=slot,
-        state_idx=torch.arange(B, device=device, dtype=torch.int32),
+        state_idx=torch.arange(1, B + 1, device=device, dtype=torch.int32),  # line 0 is vLLM's null block
         max_k=c + 1,
     )
 
@@ -114,10 +114,10 @@ def alloc_and_fill(plan: RankPlan, dims: FalconH1Dims, ctx: DecodeCtx, seed: int
         conv_rows_local = sum(r.stop - r.start for r in s.conv_rows)
         st.conv_state = torch.zeros(B + 1, dims.d_conv - 1, conv_rows_local, device=device, dtype=torch.bfloat16)
         full_conv = full_conv_state(seed, dims, B, device)
-        st.conv_state[:B] = torch.cat([full_conv[:, :, r] for r in s.conv_rows], -1)
+        st.conv_state[1 : B + 1] = torch.cat([full_conv[:, :, r] for r in s.conv_rows], -1)
         st.ssm_state = torch.zeros(B + 1, nhr, p, N, device=device, dtype=torch.bfloat16)
         for li, j in enumerate(s.heads):
-            st.ssm_state[:B, li] = full_ssm_head(seed, j, B, p, N, device)
+            st.ssm_state[1 : B + 1, li] = full_ssm_head(seed, j, B, p, N, device)
     return st
 
 

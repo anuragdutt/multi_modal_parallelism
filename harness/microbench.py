@@ -111,7 +111,7 @@ def main() -> None:
             Cm = torch.randn(B, 1, 256, device=dev, dtype=bf)
             D = torch.ones(heads, 128, device=dev)
             dtb = torch.zeros(heads, 128, device=dev)
-            idx = torch.arange(B, device=dev, dtype=torch.int32)
+            idx = torch.arange(1, B + 1, device=dev, dtype=torch.int32)
             y = torch.empty_like(x)
             fn = lambda: K.ssm_update(state, x, dt, A, Bm, Cm, D, dtb, idx, y)  # noqa: E731
             nbytes = 2 * B * heads * 128 * 256 * 2
