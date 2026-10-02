@@ -111,6 +111,78 @@ def parallel_residual_spec(d: dict) -> LayerSpec:
     return LayerSpec(d["name"], H, [Phase("block", [attn, mlp], summed=True)], d.get("layers", 1))
 
 
+def sequential_hybrid_spec(d: dict) -> LayerSpec:
+    """One phase per layer type; each phase has a single branch, so the choice is the layout of that layer type:
+    attention {tp, dp}, recurrent {tp}, moe {tp, ep}. Layer counts weight the composite step."""
+    H, hd, nq, nkv = d["hidden"], d["head_dim"], d["n_q"], d["n_kv"]
+    nh, p, N, G, d_ssm = d["n_mamba_heads"], d["mamba_head_dim"], d["d_state"], d["n_groups"], d["d_ssm"]
+    attn = Branch("attention", [
+        Op("attn.qkv", "gemv", weight=(nq + 2 * nkv) * hd * H * BF16, units=nkv),
+        Op("attn.fa", "attn", cache_per_tok=2 * nkv * hd * BF16, units=nkv),
+        Op("attn.oproj", "gemv", weight=H * nq * hd * BF16),
+    ], cap=max(nkv, 1))
+    in_rows = 2 * d_ssm + 2 * G * N + nh
+    rec = Branch("recurrent", [
+        Op("ssm.inproj", "gemv", weight=in_rows * H * BF16),
+        Op("ssm.ssu", "ssu", state_per_seq=2 * nh * p * N * BF16),
+        Op("ssm.outproj", "gemv", weight=H * d_ssm * BF16),
+    ], cap=nh)
+    e_bytes = d["moe_matrices"] * d["moe_intermediate"] * H * BF16
+    moe = Branch("moe", [
+        Op("moe.experts", "gemv", weight=d["n_experts"] * e_bytes, units=d["n_experts"]),
+        Op("moe.shared", "gemv", weight=d["shared_matrices"] * d["shared_intermediate"] * H * BF16),
+    ], cap=d["n_experts"])
+    spec = LayerSpec(d["name"], H, [Phase("attention", [attn], True), Phase("recurrent", [rec], True), Phase("moe", [moe], True)], d["layers"])
+    spec.counts = {"attention": d["n_attn_layers"], "recurrent": d["n_mamba_layers"], "moe": d["n_moe_layers"]}  # type: ignore[attr-defined]
+    spec.top_k = d["top_k"]  # type: ignore[attr-defined]
+    return spec
+
+
+def sequential_run(spec: LayerSpec, world: int, bw: BwTables | None, cells: list[tuple[int, int]], variant: str = "graph") -> None:
+    """Per layer type: tp (every rank shards the layer) vs the recipe's layout: attention data-parallel over
+    sequences (weights replicated, KV read once), experts partitioned (each rank reads only the experts it owns).
+    Composite step = sum over types of count * best time; speedup vs all-tp."""
+    print(f"\n=== {spec.model}: world={world}, variant={variant}, sequential hybrid ===")
+    counts, top_k = spec.counts, spec.top_k  # type: ignore[attr-defined]
+    msg_bytes = lambda B: B * spec.hidden * BF16  # noqa: E731
+    header = "layer type / layout".ljust(34) + "".join(f"{f'B{B} c{c}':>14s}" for B, c in cells)
+    print(header)
+    composite_tp = [0.0] * len(cells)
+    composite_best = [0.0] * len(cells)
+    for phase in spec.phases:
+        b = phase.branches[0]
+        rows = []
+        for layout in (["tp", "dp"] if phase.name == "attention" else ["tp", "ep"] if phase.name == "moe" else ["tp"]):
+            vals = []
+            for B, c in cells:
+                ar = ar_time_ms(world, msg_bytes(B), bw, variant) if world > 1 else 0.0
+                if layout == "tp":
+                    if phase.name == "moe":
+                        touched = min(b.ops[0].units, B * top_k)  # distinct experts hit per step (upper bound)
+                        per_expert = b.ops[0].weight // b.ops[0].units
+                        t = op_time_ms(b.ops[0], touched * per_expert // world, bw, variant) + op_time_ms(b.ops[1], b.ops[1].weight // world, bw, variant)
+                    else:
+                        t = sum(op_time_ms(op, nb, bw, variant) for op, nb in zip(b.ops, b.bytes(B, c, world).values()))
+                    t += ar
+                elif layout == "dp":  # sequences split; weights replicated; each rank reads its own sequences' KV once
+                    Bl = max(1, B // world)
+                    t = sum(op_time_ms(op, op.bytes(Bl, c, 1), bw, variant) for op in b.ops) + ar  # all-gather ~ all-reduce bytes
+                else:  # ep: experts partitioned; a rank reads only the touched experts it owns, full matrices
+                    touched = min(b.ops[0].units, B * top_k)
+                    per_expert = b.ops[0].weight // b.ops[0].units
+                    t = op_time_ms(b.ops[0], (touched // world) * per_expert, bw, variant) + op_time_ms(b.ops[1], b.ops[1].weight // world, bw, variant) + ar
+                vals.append(t)
+            rows.append((layout, vals))
+        for layout, vals in rows:
+            print(f"{phase.name + ' / ' + layout:34s}" + "".join(f"{v:9.3f}ms{rows[0][1][i] / v:4.2f}x" for i, v in enumerate(vals)))
+        n = counts[phase.name]
+        for i in range(len(cells)):
+            composite_tp[i] += n * rows[0][1][i]
+            composite_best[i] += n * min(v[i] for _, v in rows)
+    print("composite step (all layers), all-tp".ljust(34) + "".join(f"{v:9.3f}ms1.00x" for v in composite_tp))
+    print("composite step, recipe layout".ljust(34) + "".join(f"{v:9.3f}ms{t / v:4.2f}x" for v, t in zip(composite_best, composite_tp)))
+
+
 # ----------------------------------------------------------------------------- scoring
 def op_time_ms(op: Op, nbytes: int, bw: BwTables | None, variant: str) -> float:
     launch = LAUNCH_US[variant] / 1e3
@@ -210,16 +282,19 @@ def load_dims(path: str) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="dims yaml")
-    ap.add_argument("--template", choices=["falcon_h1", "parallel_residual"], required=True)
+    ap.add_argument("--template", choices=["falcon_h1", "parallel_residual", "sequential_hybrid"], required=True)
     ap.add_argument("--world", type=int, default=4)
     ap.add_argument("--bw", default="results/raw/microbench.csv")
     ap.add_argument("--variant", default="graph")
     ap.add_argument("--cells", nargs="*", default=["1:512", "16:512", "16:8192", "64:8192", "64:32768"])
     args = ap.parse_args()
     d = load_dims(args.model)
-    spec = falcon_h1_spec(d) if args.template == "falcon_h1" else parallel_residual_spec(d)
     bw = BwTables.from_csv(args.bw) if Path(args.bw).exists() else None
     cells = [tuple(int(x) for x in s.split(":")) for s in args.cells]
+    if args.template == "sequential_hybrid":
+        sequential_run(sequential_hybrid_spec(d), args.world, bw, cells, args.variant)
+        return
+    spec = falcon_h1_spec(d) if args.template == "falcon_h1" else parallel_residual_spec(d)
     run(spec, args.world, bw, cells, args.variant)
 
 

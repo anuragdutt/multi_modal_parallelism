@@ -1,0 +1,22 @@
+# Qwen/Qwen3.5-35B-A3B (config.json): 30 Gated DeltaNet layers + 10 gated-attention layers, MoE in every layer.
+name: qwen35_35b_a3b
+hidden: 2048
+layers: 40
+n_mamba_layers: 30       # GDN layers (state 32 v-heads x 128 x 128)
+n_moe_layers: 40
+n_attn_layers: 10
+n_q: 16
+n_kv: 2
+head_dim: 256
+n_mamba_heads: 32
+mamba_head_dim: 128
+d_ssm: 4096
+d_state: 128
+n_groups: 16             # 16 key heads shared by 32 value heads
+d_conv: 4
+n_experts: 256
+top_k: 8
+moe_intermediate: 512
+moe_matrices: 3
+shared_intermediate: 512
+shared_matrices: 3

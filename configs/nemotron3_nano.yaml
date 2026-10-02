@@ -1,0 +1,22 @@
+# nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B (config.json): hybrid pattern MEMEM*EMEMEM*... = 23 Mamba-2, 23 MoE, 6 attention.
+name: nemotron3_nano_30b_a3b
+hidden: 2688
+layers: 52
+n_mamba_layers: 23
+n_moe_layers: 23
+n_attn_layers: 6
+n_q: 32
+n_kv: 2
+head_dim: 128
+n_mamba_heads: 64
+mamba_head_dim: 64
+d_ssm: 4096
+d_state: 128
+n_groups: 8
+d_conv: 4
+n_experts: 128
+top_k: 6
+moe_intermediate: 1856
+moe_matrices: 2          # relu^2 MLP: up and down, no gate
+shared_intermediate: 3712
+shared_matrices: 2
