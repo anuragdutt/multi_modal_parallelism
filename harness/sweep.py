@@ -53,6 +53,9 @@ def main() -> None:
     groups = init_groups()
     dims, full = load_dims_and_weights(args)
     bw = BwTables.from_csv(args.bw) if os.path.exists(args.bw) else None
+    template = getattr(args, "template", "h1")
+    if template == "pr":
+        from .pr_model import measure_pr
     if groups.rank == 0:
         print(f"[sweep] {len(specs)} configurations x {repeats} repeats -> {args.out}", flush=True)
     t0 = time.time()
@@ -61,8 +64,12 @@ def main() -> None:
         for spec in specs:
             spec_r = RunSpec(**{**spec.__dict__, "tag": f"rep{rep}", "repeat_offset": rep})
             try:
-                measure(spec_r, groups, dims, full, args.out, args.correctness_out, args.check and rep == 0, bw,
-                        os.environ.get("MMP_IMAGE_TAG", ""))
+                if template == "pr":
+                    measure_pr(spec_r, groups, dims, full, args.out, args.correctness_out, args.check and rep == 0,
+                               os.environ.get("MMP_IMAGE_TAG", ""))
+                else:
+                    measure(spec_r, groups, dims, full, args.out, args.correctness_out, args.check and rep == 0, bw,
+                            os.environ.get("MMP_IMAGE_TAG", ""))
             except Exception as e:  # keep the sweep going; record the failure
                 if groups.rank == 0:
                     print(f"[sweep] FAILED {spec_r}: {type(e).__name__}: {e}", flush=True)

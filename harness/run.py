@@ -15,7 +15,13 @@ from .model import BwTables
 from .weights import load_layer_from_safetensors, random_layer
 
 
-def load_dims_and_weights(args) -> tuple[FalconH1Dims, dict]:
+def load_dims_and_weights(args):
+    if getattr(args, "template", "h1") == "pr":
+        from .pr_model import PRDims, load_layer_pr, random_layer_pr
+
+        dims = PRDims.from_hf(args.model_dir)
+        full = random_layer_pr(dims, args.seed) if args.random_weights else load_layer_pr(args.model_dir, args.layer_idx)
+        return dims, full
     if args.model_dir:
         dims = FalconH1Dims.from_hf(args.model_dir)
     else:
@@ -37,6 +43,7 @@ def add_common_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--out", default="results/raw/dev.csv")
     ap.add_argument("--correctness-out", default="results/raw/correctness.csv")
     ap.add_argument("--tag", default="")
+    ap.add_argument("--template", choices=["h1", "pr"], default="h1", help="h1 = Falcon-H1 (attention || mamba2, then MLP); pr = parallel-residual Transformer")
 
 
 def main() -> None:
@@ -67,7 +74,12 @@ def main() -> None:
     groups = init_groups()
     dims, full = load_dims_and_weights(args)
     bw = BwTables.from_csv(args.bw) if os.path.exists(args.bw) else None
-    measure(spec, groups, dims, full, args.out, args.correctness_out, args.check, bw, os.environ.get("MMP_IMAGE_TAG", ""))
+    if args.template == "pr":
+        from .pr_model import measure_pr
+
+        measure_pr(spec, groups, dims, full, args.out, args.correctness_out, args.check, os.environ.get("MMP_IMAGE_TAG", ""))
+    else:
+        measure(spec, groups, dims, full, args.out, args.correctness_out, args.check, bw, os.environ.get("MMP_IMAGE_TAG", ""))
     barrier_sync()
     destroy()
 
