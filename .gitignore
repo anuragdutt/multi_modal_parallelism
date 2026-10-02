@@ -55,3 +55,6 @@ docker/images/*
 
 # container home (triton/torch caches) for the dev container
 .container_home/
+
+# per-model raw CSVs (large); figures and summaries under results/<model>/ stay tracked
+results/*/raw/
