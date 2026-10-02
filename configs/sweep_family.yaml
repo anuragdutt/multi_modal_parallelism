@@ -1,0 +1,11 @@
+# Family sweep: the four base modes only (swing is dead for synchronous layers), all cells, 3 repeats.
+modes: [tp4, tp4_fused, tp4_streams, split22]
+swing: []
+batches: [1, 4, 16, 64]
+contexts: [512, 2048, 8192, 32768]
+variant: both
+kv_block: 16
+n_warm: 20
+n_iter: 100
+repeats: 3
+intermediate: 12288

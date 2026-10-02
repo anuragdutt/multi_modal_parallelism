@@ -63,9 +63,10 @@ class BwTables:
     @classmethod
     def from_csv(cls, path: str | Path) -> "BwTables":
         rows = list(csv.DictReader(open(path)))
-        gemv, conv = Curve(), Curve()
+        gemv_by: dict[str, Curve] = {}
+        conv_by: dict[str, Curve] = {}
         ssu_by: dict[str, Curve] = {}
-        attn: dict[int, Curve] = {}
+        attn_by: dict[tuple[int, str], Curve] = {}
         ar: dict[tuple[int, str], Curve] = {}
         stream = 0.0
         for r in rows:
@@ -75,19 +76,26 @@ class BwTables:
             b, gbps, ms = float(r["bytes"]), float(r["GBps"]), float(r["median_ms"])
             if k == "stream":
                 stream = max(stream, gbps)
-            elif k == "gemv" and r["variant"] == "eager":
-                gemv.add(b, gbps)
-            elif k == "attn" and r["variant"] == "eager":
-                attn.setdefault(int(p["kv_block"]), Curve()).add(b, gbps)
+            elif k == "gemv":
+                gemv_by.setdefault(r["variant"], Curve()).add(b, gbps)
+            elif k == "attn":
+                attn_by.setdefault((int(p["kv_block"]), r["variant"]), Curve()).add(b, gbps)
             elif k == "ssu":
                 ssu_by.setdefault(r["variant"], Curve()).add(b, gbps)
-            elif k == "conv" and r["variant"] == "eager":
-                conv.add(b, gbps)
+            elif k == "conv":
+                conv_by.setdefault(r["variant"], Curve()).add(b, gbps)
             elif k == "allreduce":
                 key = (int(p["group_size"]), r["variant"])
                 ar.setdefault(key, Curve(is_time=True)).add(b, ms * 1e3)
-        # graph-captured curves exclude launch overhead; prefer them for kernels that have both
-        ssu = ssu_by.get("graph") or ssu_by.get("eager") or Curve()
+        # graph-captured curves exclude launch overhead; prefer them wherever both exist
+        def pick(by: dict[str, Curve]) -> Curve:
+            return by.get("graph") or by.get("eager") or Curve()
+
+        gemv, ssu, conv = pick(gemv_by), pick(ssu_by), pick(conv_by)
+        attn: dict[int, Curve] = {}
+        for (kvb, var), cur in attn_by.items():
+            if var == "graph" or kvb not in attn:
+                attn[kvb] = cur
         for c in [gemv, ssu, conv, *attn.values(), *ar.values()]:
             c.finalize()
         return cls(gemv=gemv, attn=attn, ssu=ssu, conv=conv, ar=ar, stream=stream)

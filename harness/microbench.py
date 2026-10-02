@@ -78,8 +78,9 @@ def main() -> None:
         W = torch.randn(rows_, 3072, device=dev, dtype=bf)
         for T in Ts:
             x = torch.randn(T, 3072, device=dev, dtype=bf)
-            st = _time(lambda: K.gemm(x, W))
-            rec("gemv", {"rows": rows_, "T": T}, W.numel() * 2 + x.numel() * 2, st, "eager")
+            for variant in ("eager", "graph"):
+                st = _time(lambda: K.gemm(x, W), graph=(variant == "graph"))
+                rec("gemv", {"rows": rows_, "T": T}, W.numel() * 2 + x.numel() * 2, st, variant)
         del W
 
     # (c) paged FA2 decode
@@ -94,9 +95,10 @@ def main() -> None:
                     q = torch.randn(B, nq, 128, device=dev, dtype=bf)
                     out = torch.empty_like(q)
                     fn = lambda: K.attn_decode(q, kc, vc, ctx.cu_q, ctx.seqused_k, ctx.max_k, ctx.block_table, out)  # noqa: E731
-                    st = _time(fn)
                     nbytes = 2 * B * (c + 1) * nkv * 128 * 2
-                    rec("attn", {"nq": nq, "nkv": nkv, "kv_block": kvb, "B": B, "c": c, "layout": kind}, nbytes, st, "eager")
+                    for variant in ("eager", "graph"):
+                        st = _time(fn, graph=(variant == "graph"))
+                        rec("attn", {"nq": nq, "nkv": nkv, "kv_block": kvb, "B": B, "c": c, "layout": kind}, nbytes, st, variant)
                     del kv, kc, vc, q, out
                     torch.cuda.empty_cache()
 
@@ -126,8 +128,9 @@ def main() -> None:
             csT = cs.transpose(-1, -2)
             fn2 = lambda: K.conv_update(xc, csT, cw, cb, idx)  # noqa: E731
             nbytes = 2 * B * 3 * conv_rows * 2
-            st = _time(fn2)
-            rec("conv", {"rows": conv_rows, "B": B}, nbytes, st, "eager")
+            for variant in ("eager", "graph"):
+                st = _time(fn2, graph=(variant == "graph"))
+                rec("conv", {"rows": conv_rows, "B": B}, nbytes, st, variant)
             del state, x, dt, A, Bm, Cm, cs, xc
             torch.cuda.empty_cache()
 
