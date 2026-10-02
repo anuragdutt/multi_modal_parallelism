@@ -196,6 +196,7 @@ class AttentionLayer:
         h1 = dims.as_h1()
         bf = torch.bfloat16
         self.norm_w = full["norm"].to(device, bf)
+        self.B_total = B
         if mode == "dp4":
             self.Bl = math.ceil(B / world)
             self.b0 = min(rank * self.Bl, B)
@@ -224,13 +225,12 @@ class AttentionLayer:
 
     def _fill_dp(self, h1: FalconH1Dims, seed: int, device: torch.device) -> RankStates:
         """Allocate the DP rank's cache for its sequence slice with the same deterministic content as tp4."""
-        B_total = self.out.shape[0] if hasattr(self, "out") else None
         st = RankStates()
         nb = self.Bl * self.ctx.nblk + 1
         st.kv, st.key_cache, st.value_cache, st.kv_kind = K.alloc_kv(nb, self.ctx.kv_block, self.dims.n_kv, self.dims.head_dim, device)
-        Bg = self.b0 + self.Bl  # generate up to the last global sequence this rank holds
+        # generate the FULL batch's content (CUDA RNG values depend on the tensor size) and take this rank's slice
         for hh in range(self.dims.n_kv):
-            k, v = full_kv_head(seed, hh, Bg, self.ctx.c, self.dims.head_dim, device)
+            k, v = full_kv_head(seed, hh, self.B_total, self.ctx.c, self.dims.head_dim, device)
             for bl in range(self.nloc):
                 b = self.b0 + bl
                 for bi, blk in enumerate(self.ctx.block_table[bl].tolist()):
