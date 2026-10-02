@@ -1,0 +1,25 @@
+# Falcon-H1-3B-Instruct (config.json): 2 KV heads, 10 q heads, 32 Mamba-2 heads, n_groups 1.
+name: falcon_h1_3b
+hidden: 2560
+intermediate: 6144
+n_q: 10
+n_kv: 2
+head_dim: 128
+n_mamba_heads: 32
+mamba_head_dim: 128
+d_ssm: 4096
+d_state: 256
+n_groups: 1
+d_conv: 4
+chunk: 128
+rms_eps: 1.0e-5
+rope_theta: 100000000000.0
+max_pos: 131072
+attn_in: 1.0
+attn_out: 0.15
+key_mult: 0.0442
+ssm_in: 0.5
+ssm_out: 0.0884
+ssm_mults: [0.3535533, 0.25, 0.1767766, 0.5, 0.3535533]
+mlp_mults: [0.3535533, 0.0781]
+layers: 32

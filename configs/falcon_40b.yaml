@@ -1,0 +1,10 @@
+# tiiuae/falcon-40b (config.json): parallel attention + GELU MLP blocks, 128 q heads x 64, 8 KV heads.
+name: falcon_40b
+hidden: 8192
+intermediate: 32768
+n_q: 128
+n_kv: 8
+head_dim: 64
+gated_mlp: false
+rope_theta: 10000.0
+layers: 60

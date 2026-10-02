@@ -1,4 +1,5 @@
 # Falcon-H1-7B-Instruct dimensions and multipliers (from config.json); used with --random-weights.
+name: falcon_h1_7b
 hidden: 3072
 intermediate: 12288
 n_q: 12
@@ -21,3 +22,4 @@ ssm_in: 0.4166666
 ssm_out: 0.1178511
 ssm_mults: [0.3535533, 0.25, 0.1767766, 0.5, 0.3535533]
 mlp_mults: [0.2946278, 0.0325520]
+layers: 44
