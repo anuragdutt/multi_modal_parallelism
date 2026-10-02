@@ -1057,3 +1057,20 @@ and at 8 ranks it should win everywhere; Falcon-40B has no winning split at 4 ra
 is unbounded, so the recipe recommends tensor parallelism with the fused reduction and stream overlap. For
 sequential hybrids with 2 KV heads (Nemotron 3 Nano, Qwen3.5) the same rules emit data-parallel attention beside
 tensor-parallel SSM layers and expert parallelism, which is the configuration engines reached by hand.
+
+## 24. Family results (2026-10-02)
+
+**Falcon-H1-34B at 4 ranks, graph variant, min over repeats, speedup of split22 over tp4:** 1.10x to 1.15x at
+512 to 2048 tokens for every batch, 1.19x at batch 4 and 8192, then a sign flip at long context: 0.83x at batch 16
+and 32K, 0.68x at batch 64 and 32K. The recipe's graph-curve re-score predicted 1.00x at short context and 0.62x
+at batch 64 and 32K; the sign flip and the long-context magnitude were predicted, and the short-context wins are
+again about 10 percent above the model, which still under-counts the collective and occupancy savings. The
+stream-overlap and fused baselines give 1.04x to 1.18x throughout.
+
+**Falcon-H1-3B at 4 ranks:** homogeneous tensor parallelism is not definable, because 10 query heads do not divide
+by 4; vLLM caps the 3B at TP 2. The split layout is feasible, two ranks with 5 query heads each and two ranks with
+16 Mamba heads each. The harness now implements uneven query-head shards, 3/2/3/2, so a 4-rank TP baseline
+exists for the comparison, and a TP-2 reference is measured as well.
+
+Recipe accuracy so far: direction right in all 32 measured cells across the 7B and 34B; magnitude within about
+10 percent except at short context, where the model is conservative.

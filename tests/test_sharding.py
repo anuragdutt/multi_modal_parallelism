@@ -33,6 +33,15 @@ def test_tp4_attention_partition_and_replication():
     assert shards[3].o_cols == slice(1152, 1536)
 
 
+def test_uneven_attention_shards_3b():
+    D3 = FalconH1Dims(**{**D7.__dict__, "hidden": 2560, "intermediate": 6144, "n_q": 10, "n_mamba_heads": 32, "d_ssm": 4096})
+    shards = [attn_shard(D3, r, 4) for r in range(4)]
+    _covers([s.q_heads for s in shards], 10)
+    assert [len(s.q_heads) for s in shards] == [3, 2, 3, 2]
+    assert kv_replication_map(D3, 4) == {0: (0, 1), 1: (2, 3)}
+    assert [attn_shard(D3, r, 2).q_heads for r in range(2)] == [range(0, 5), range(5, 10)]
+
+
 def test_split22_attention_no_replication():
     shards = [attn_shard(D7, r, 2) for r in range(2)]
     _covers([s.q_heads for s in shards], 12)

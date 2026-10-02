@@ -120,22 +120,36 @@ def _check(cond: bool, msg: str) -> None:
         raise ValueError(msg)
 
 
+def _even_split(n: int, parts: int) -> list[range]:
+    """Split range(n) into `parts` contiguous ranges whose sizes differ by at most one."""
+    base, extra = divmod(n, parts)
+    out, start = [], 0
+    for i in range(parts):
+        size = base + (1 if i < extra else 0)
+        out.append(range(start, start + size))
+        start += size
+    return out
+
+
 def attn_shard(dims: FalconH1Dims, group_rank: int, group_size: int) -> AttnShard:
+    """Head-parallel attention shard. When the group is larger than the KV-head count, each KV head is
+    served by group_size // n_kv ranks that split its query heads as evenly as possible (uneven shards are
+    allowed, e.g. 10 query heads over 4 ranks as 3/2/3/2); vLLM itself requires divisibility."""
     hd = dims.head_dim
-    _check(dims.n_q % group_size == 0, f"attention heads {dims.n_q} not divisible by group {group_size}")
-    nqr = dims.n_q // group_size
-    q_heads = range(group_rank * nqr, (group_rank + 1) * nqr)
     q_per_kv = dims.n_q // dims.n_kv
     if dims.n_kv >= group_size:
         _check(dims.n_kv % group_size == 0, "kv heads not divisible by group size")
         nkvr = dims.n_kv // group_size
         kv_heads = range(group_rank * nkvr, (group_rank + 1) * nkvr)
+        q_heads = range(kv_heads.start * q_per_kv, kv_heads.stop * q_per_kv)
         replicas = 1
     else:
         _check(group_size % dims.n_kv == 0, "group size not a multiple of kv heads")
         replicas = group_size // dims.n_kv
-        kv_heads = range(group_rank // replicas, group_rank // replicas + 1)
-    # consistency with GQA: every q head of this rank must map into kv_heads
+        h = group_rank // replicas
+        kv_heads = range(h, h + 1)
+        local = _even_split(q_per_kv, replicas)[group_rank % replicas]
+        q_heads = range(h * q_per_kv + local.start, h * q_per_kv + local.stop)
     for i in q_heads:
         _check(i // q_per_kv in kv_heads, f"q head {i} maps to kv head {i // q_per_kv}, not in {list(kv_heads)}")
     return AttnShard(
