@@ -1021,3 +1021,39 @@ SSM output:
   inside a pair). The transfer is one partial output plus one LSE per head.
 The split point then is "how many gate rows" at short context and "how many KV positions" at long context, both
 chosen per step from the same slack measurement, with no state migration.
+
+## 23. The recipe: architecture-aware parallelism synthesis (2026-10-02)
+
+`harness/synth.py` turns a model's layer structure into ranked rank-group assignments. Three rules, each one a
+measured effect of the 7B sweep:
+
+- R1, replication: an operator's rank group never exceeds its unit count (KV heads, SSM heads or groups,
+  experts). Beyond it the data is replicated and every replica reads it each step.
+- R2, summed branches: operators that read the same input and are added into the residual can live on disjoint
+  groups with one all-reduce of partial sums; internal reductions such as the gated norm run on the branch group.
+- R3, phase balance: every all-reduce is a barrier, so the step is the sum over phases of the slowest group's
+  time plus collectives. Groups are sized to balance the branches inside a phase; work can be moved only
+  within a phase.
+
+The scorer uses the microbench bandwidth curves, which encode kernel occupancy versus bytes, and the measured
+all-reduce costs per group size. Homogeneous tensor parallelism is the candidate where every group is the world.
+
+Predictions before measurement (graph variant, 4 ranks, speedup over tp4; eager-curve scoring, to be re-scored
+with graph-captured curves):
+
+| model | layout | B1 c512 | B16 c512 | B16 c8192 | B64 c8192 | B64 c32768 |
+|---|---|---|---|---|---|---|
+| Falcon-H1-7B | attention 2 + mamba 2 | 1.35x | 1.29x | 1.44x | 1.31x | 1.12x |
+| Falcon-H1-7B measured | same | 1.11x | 1.11x | 1.38x | 1.31x | 1.12x |
+| Falcon-H1-3B | attention 2 + mamba 2 | 1.39x | 1.25x | 1.47x | 1.37x | 1.14x |
+| Falcon-H1-34B | attention 2 + mamba 2 | 1.18x | 1.12x | 1.09x | 0.91x | 0.66x |
+| Falcon-H1-34B at 8 ranks | attention 4 + mamba 4 | 1.20x | 1.23x | 1.37x | 1.29x | 1.11x |
+| Falcon-40B | attention 1 + mlp 3 | 1.08x | 1.08x | 0.85x | 0.54x | 0.34x |
+| Falcon-40B | attention 2 + mlp 2 | 0.73x | 0.74x | 0.81x | 1.02x | 0.68x |
+
+Reading: the 3B should behave like the 7B; the 34B at 4 ranks should win at short context and lose at long
+context because its 4 KV heads make tp4 replication-free while the split doubles each attention rank's KV read,
+and at 8 ranks it should win everywhere; Falcon-40B has no winning split at 4 ranks because its MLP dominates and
+is unbounded, so the recipe recommends tensor parallelism with the fused reduction and stream overlap. For
+sequential hybrids with 2 KV heads (Nemotron 3 Nano, Qwen3.5) the same rules emit data-parallel attention beside
+tensor-parallel SSM layers and expert parallelism, which is the configuration engines reached by hand.
