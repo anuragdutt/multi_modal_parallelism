@@ -1091,3 +1091,18 @@ TP-2 reference (the largest homogeneous layout vLLM supports for the 3B), batch 
 
 So for the 3B the split is the only 4-GPU layout an engine could ship without uneven head shards, and it is
 1.23x to 1.57x faster per layer than the TP-2 ceiling.
+
+**Falcon-40B at 4 ranks (parallel-residual Transformer, 8 KV heads), graph variant, min over repeats, speedup over
+tp4:** split22 0.66x to 0.97x, split13 0.32x to 1.03x, stream overlap 1.00x to 1.08x. The recipe predicted no
+winning split (split22 0.65x to 0.99x, split13 0.33x to 0.97x) because tp4 is already replication-free at 4 ranks
+and the unbounded MLP dominates; the measurement confirms it cell by cell, so the recipe discriminates between
+architectures rather than always splitting. Correctness of the new template: mean relative error 1.7e-3 against
+the fp32 reference for all modes.
+
+**Sequential hybrids, recipe prediction at 4 ranks (graph curves):** data-parallel attention beats tensor-parallel
+attention per attention layer only at long context and high batch (Nemotron 3 Nano 1.34x at batch 64 and 8K,
+1.75x at 32K; Qwen3.5-35B-A3B 1.19x at batch 16 and 8K, 1.87x at batch 64 and 32K) and loses at short context
+(0.47x to 0.87x), while expert-parallel and tensor-parallel MoE move the same bytes per rank. Weighted by layer
+counts the composite step gains at most 1.11x for Nemotron 3 Nano and 1.28x for Qwen3.5 at long context and
+nothing at short context, so the paradigm there is an elastic per-step choice of the attention layout rather than
+a static split, and the engines' hand-built data-parallel attention configuration is the long-context limit of it.
