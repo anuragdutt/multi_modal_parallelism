@@ -1,0 +1,11 @@
+# 8-rank family sweep (NVwulf h200x8): homogeneous layouts and the recipe's 4+4 split.
+modes: [tp4, tp4_fused, tp4_streams, split44]
+swing: []
+batches: [1, 4, 16, 64]
+contexts: [512, 2048, 8192, 32768]
+variant: both
+kv_block: 16
+n_warm: 20
+n_iter: 100
+repeats: 3
+intermediate: 21504

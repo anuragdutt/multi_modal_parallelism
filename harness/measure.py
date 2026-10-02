@@ -47,7 +47,7 @@ def vllm_commit() -> str:
 
 def resolve_k(spec: RunSpec, dims: FalconH1Dims, world: int, bw: BwTables | None) -> tuple[int, int | None, str]:
     """Return (w, k, cuts_src) for a spec; 'model' needs a BwTables, otherwise falls back to neutral."""
-    if spec.mode != "split22" or spec.swing <= 0:
+    if not spec.mode.startswith("split") or spec.swing <= 0:
         return 0, None, ""
     w = swing_width(spec.swing, dims.intermediate // world)
     src = spec.cuts_src

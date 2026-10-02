@@ -280,17 +280,19 @@ def plan_for(
             attn_ranks=all_ranks, ssm_ranks=all_ranks,
             combine="allreduce_each" if mode == "tp4" else "sum_then_allreduce",
         )
-    if mode == "split22":
-        _check(world == 4, "split22 needs world size 4")
-        attn_ranks, ssm_ranks = (0, 1), (2, 3)
+    if mode.startswith("split"):
+        a, m = int(mode[5]), int(mode[6])
+        _check(a + m == world, f"{mode} does not match world size {world}")
+        attn_ranks, ssm_ranks = tuple(range(a)), tuple(range(a, world))
         is_attn = rank in attn_ranks
         role = "attn" if is_attn else "ssm"
-        partner = rank + 2 if is_attn else rank - 2
+        partner = (rank + a if is_attn else rank - a) if a == m else -1  # swing pairs exist only for even splits
+        swing_eff = swing if a == m else 0.0
         return RankPlan(
             mode=mode, rank=rank, world=world,
-            attn=attn_shard(dims, rank, 2) if is_attn else None,
-            ssm=None if is_attn else ssm_shard(dims, rank - 2, 2, ssm_ranks),
-            mlp=mlp_shard(dims, rank, world, swing, k, role, partner),
+            attn=attn_shard(dims, rank, a) if is_attn else None,
+            ssm=None if is_attn else ssm_shard(dims, rank - a, m, ssm_ranks),
+            mlp=mlp_shard(dims, rank, world, swing_eff, k, role if a == m else "tp", partner),
             attn_ranks=attn_ranks, ssm_ranks=ssm_ranks, combine="sum_then_allreduce",
         )
     raise ValueError(f"unknown mode {mode}")

@@ -18,8 +18,9 @@ class Groups:
     local_rank: int
     world_size: int
     tp: object  # vllm GroupCoordinator
-    pair: object | None  # vllm GroupCoordinator or None (world_size != 4)
+    pair: object | None  # consecutive 2-rank blocks [[0,1],[2,3],...]
     device: torch.device
+    quad: object | None = None  # consecutive 4-rank blocks [[0..3],[4..7]] when world_size >= 8
 
     def group_for_ranks(self, ranks: tuple[int, ...]):
         """Return the coordinator whose membership equals `ranks`, or None for a single rank."""
@@ -27,9 +28,10 @@ class Groups:
             return None
         if len(ranks) == self.world_size:
             return self.tp
-        if self.pair is not None and len(ranks) == 2:
-            return self.pair
-        raise ValueError(f"no communicator for ranks {ranks}")
+        for g in (self.pair, self.quad):
+            if g is not None and len(ranks) == g.world_size and self.rank in ranks and tuple(g.ranks) == tuple(ranks):
+                return g
+        raise ValueError(f"no communicator for ranks {ranks} (rank {self.rank})")
 
 
 _CONFIG_STACK = None
@@ -63,10 +65,12 @@ def init_groups() -> Groups:
                                     local_rank=local_rank, backend="nccl")
     ps.initialize_model_parallel(tensor_model_parallel_size=world)
     tp = ps.get_tp_group()
-    pair = None
-    if world == 4:
-        pair = ps.init_model_parallel_group([[0, 1], [2, 3]], local_rank, "nccl", group_name="branch_pair")
-    return Groups(rank=rank, local_rank=local_rank, world_size=world, tp=tp, pair=pair, device=device)
+    pair = quad = None
+    if world >= 4 and world % 2 == 0:
+        pair = ps.init_model_parallel_group([[2 * i, 2 * i + 1] for i in range(world // 2)], local_rank, "nccl", group_name="branch_pair")
+    if world >= 8 and world % 4 == 0:
+        quad = ps.init_model_parallel_group([[4 * i + j for j in range(4)] for i in range(world // 4)], local_rank, "nccl", group_name="branch_quad")
+    return Groups(rank=rank, local_rank=local_rank, world_size=world, tp=tp, pair=pair, device=device, quad=quad)
 
 
 def describe_comm(g) -> dict:
@@ -93,11 +97,13 @@ def capture_context(groups: Groups) -> Iterator[object]:
     """Enter vLLM's graph-capture contexts for the TP group (module-level) and the pair group."""
     from vllm.distributed import parallel_state as ps
 
+    from contextlib import ExitStack
+
     with ps.graph_capture(groups.device) as ctx:
-        if groups.pair is not None:
-            with groups.pair.graph_capture(ctx):
-                yield ctx
-        else:
+        with ExitStack() as stack:
+            for g in (groups.pair, groups.quad):
+                if g is not None:
+                    stack.enter_context(g.graph_capture(ctx))
             yield ctx
 
 
