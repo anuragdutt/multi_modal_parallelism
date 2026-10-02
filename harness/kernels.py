@@ -37,12 +37,12 @@ def silu_and_mul(x: torch.Tensor) -> torch.Tensor:
     return out
 
 
-def gated_rmsnorm(y: torch.Tensor, z: torch.Tensor, w: torch.Tensor, eps: float, group) -> torch.Tensor:
+def gated_rmsnorm(y: torch.Tensor, z: torch.Tensor, w: torch.Tensor, eps: float, group, group_size: int | None = None) -> torch.Tensor:
     """Mamba-2 gated RMSNorm, gate applied before the norm (mamba_norm_before_gate=false).
-    group=None -> vLLM's fused Triton kernel (tp=1 path); otherwise vLLM's native TP path with a [T,1]
-    fp32 all-reduce of the local sum of squares over `group`."""
+    group=None -> vLLM's fused Triton kernel (local norm; `group_size` when the rank holds several n_groups);
+    otherwise vLLM's native TP path with a [T,1] fp32 all-reduce of the local sum of squares over `group`."""
     if group is None:
-        return _rms_norm_gated(y, w, None, z=z, eps=eps, norm_before_gate=False)
+        return _rms_norm_gated(y, w, None, z=z, eps=eps, group_size=group_size, norm_before_gate=False)
     dtype = y.dtype
     x = y * F.silu(z.to(torch.float32))
     local = x.pow(2).sum(dim=-1, keepdim=True)

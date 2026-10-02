@@ -95,7 +95,8 @@ class SsmBranch:
         )
         t.end("ssm.ssu")
         t.begin("ssm.norm")
-        y = K.gated_rmsnorm(self.y.view(ctx.B, self.nhr * self.p), z, w.norm_w, self.dims.rms_eps, self.norm_group)
+        gs = (self.nhr * self.p) // self.ng if self.ng > 1 else None  # several groups on one rank -> per-group norm
+        y = K.gated_rmsnorm(self.y.view(ctx.B, self.nhr * self.p), z, w.norm_w, self.dims.rms_eps, self.norm_group, gs)
         t.end("ssm.norm")
         t.begin("ssm.outproj")
         o = K.gemm(y, w.wout) * self.dims.ssm_out
