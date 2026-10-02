@@ -22,7 +22,8 @@ class AttentionBranch:
         assert a is not None
         self.plan, self.w, self.dims, self.st, self.ctx = plan, w, dims, st, ctx
         self.nq, self.nkv, self.hd = len(a.q_heads), len(a.kv_heads), dims.head_dim
-        self.rope_cache = K.rope_cos_sin_cache(self.hd, max(dims.max_pos, ctx.c + 2), dims.rope_theta, device)
+        self.use_rope = True
+        self.rope_cache = K.rope_cos_sin_cache(self.hd, max(min(dims.max_pos, 1 << 18), ctx.c + 2), dims.rope_theta, device)
         self.out = torch.empty(ctx.B, self.nq, self.hd, device=device, dtype=torch.bfloat16)
 
     def decode(self, x: torch.Tensor, t: OpTimer) -> torch.Tensor:
@@ -33,11 +34,12 @@ class AttentionBranch:
         q, k, v = torch.split(qkv, [w.q_rows, w.kv_rows, w.kv_rows], dim=-1)
         k = k * self.dims.key_mult
         t.end("attn.qkv")
-        t.begin("attn.rope")
         q = q.contiguous()
         k = k.contiguous()
-        K.apply_rope(ctx.positions, q, k, self.hd, self.rope_cache)
-        t.end("attn.rope")
+        if self.use_rope:
+            t.begin("attn.rope")
+            K.apply_rope(ctx.positions, q, k, self.hd, self.rope_cache)
+            t.end("attn.rope")
         t.begin("attn.kvwrite")
         K.write_kv(k.view(ctx.B, self.nkv, self.hd), v.contiguous().view(ctx.B, self.nkv, self.hd),
                    self.st.key_cache, self.st.value_cache, ctx.slot_mapping)

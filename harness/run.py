@@ -16,6 +16,11 @@ from .weights import load_layer_from_safetensors, random_layer
 
 
 def load_dims_and_weights(args):
+    if getattr(args, "template", "h1") == "seq":
+        from .seq_model import SeqDims, load_seq_layer
+
+        dims = SeqDims.from_hf(args.model_dir)
+        return dims, load_seq_layer(args.model_dir, dims, args.layer_type)
     if getattr(args, "template", "h1") == "pr":
         from .pr_model import PRDims, load_layer_pr, random_layer_pr
 
@@ -43,7 +48,8 @@ def add_common_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--out", default="results/raw/dev.csv")
     ap.add_argument("--correctness-out", default="results/raw/correctness.csv")
     ap.add_argument("--tag", default="")
-    ap.add_argument("--template", choices=["h1", "pr"], default="h1", help="h1 = Falcon-H1 (attention || mamba2, then MLP); pr = parallel-residual Transformer")
+    ap.add_argument("--template", choices=["h1", "pr", "seq"], default="h1", help="h1 = Falcon-H1; pr = parallel-residual Transformer; seq = sequential hybrid (Nemotron)")
+    ap.add_argument("--layer-type", choices=["mamba", "attention", "moe"], default="mamba", help="seq template: which layer type to measure")
 
 
 def main() -> None:
@@ -74,7 +80,11 @@ def main() -> None:
     groups = init_groups()
     dims, full = load_dims_and_weights(args)
     bw = BwTables.from_csv(args.bw) if os.path.exists(args.bw) else None
-    if args.template == "pr":
+    if args.template == "seq":
+        from .seq_model import measure_seq
+
+        measure_seq(spec, args.layer_type, groups, dims, full, args.out, args.correctness_out, args.check, os.environ.get("MMP_IMAGE_TAG", ""))
+    elif args.template == "pr":
         from .pr_model import measure_pr
 
         measure_pr(spec, groups, dims, full, args.out, args.correctness_out, args.check, os.environ.get("MMP_IMAGE_TAG", ""))
