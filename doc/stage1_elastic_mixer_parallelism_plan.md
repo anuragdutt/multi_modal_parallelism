@@ -1074,3 +1074,20 @@ exists for the comparison, and a TP-2 reference is measured as well.
 
 Recipe accuracy so far: direction right in all 32 measured cells across the 7B and 34B; magnitude within about
 10 percent except at short context, where the model is conservative.
+
+**Falcon-H1-3B at 4 ranks (uneven 3/2/3/2 query-head tp4 as the baseline), graph variant, split22 over tp4:**
+1.08x to 1.16x at 512 to 2048 tokens, 1.27x to 1.43x at 8192, 1.14x to 1.38x at 32K, 1.00x at batch 64 with 512
+tokens; repeat-to-repeat CoV below 2 percent in every cell. Same shape as the 7B, as the recipe predicted for a
+second configuration of the family.
+
+TP-2 reference (the largest homogeneous layout vLLM supports for the 3B), batch 16, graph variant:
+
+| model | layout | 512 | 8192 | 32768 |
+|---|---|---|---|---|
+| 3B | tp2 on 2 GPUs | 0.353 ms | 0.457 ms | 0.771 ms |
+| 3B | split22 on 4 GPUs | 0.288 ms | 0.291 ms | 0.596 ms |
+| 7B | tp2 on 2 GPUs | 0.480 ms | 0.577 ms | 0.893 ms |
+| 7B | split22 on 4 GPUs | 0.330 ms | 0.340 ms | 0.664 ms |
+
+So for the 3B the split is the only 4-GPU layout an engine could ship without uneven head shards, and it is
+1.23x to 1.57x faster per layer than the TP-2 ceiling.
