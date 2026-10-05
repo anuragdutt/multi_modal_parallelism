@@ -4,15 +4,19 @@ Architecture-aware parallelism for SSM-based and hybrid LLMs across multiple GPU
 
 This repository holds the experiments behind a thesis chapter on *elastic mixer parallelism*: a
 branch-split tensor-parallel layout for parallel hybrids such as Falcon-H1 (attention mixer and Mamba-2
-mixer summed in every layer), balanced per step by "swing" MLP shards instead of a static split. It is the
+mixer summed in every layer), balanced per step instead of frozen into a static split. The first
+balancing mechanism tried, "swing" MLP shards, is rejected by the stage-1 measurements (see the blog). It is the
 third step in a line of work that began with tensor parallelism for Mamba-1 (arXiv 2602.21144) and the
 SSM/gate branch split in vLLM.
 
 ## Status
 
-Planning. No experiment has been run yet. The full stage-1 plan, including the hypotheses, the verified
-environment and model facts, the exact sharding math, the Docker recipe, the harness design, the sweep,
-the byte model and the go/no-go criteria, is in
+Stage 1 measured (2026-10-01 to 2026-10-02). The branch split beats tensor parallelism in every cell of the
+Falcon-H1-7B and 3B sweeps (up to 1.38x and 1.43x per layer), swing MLP shards are rejected (the mixer
+all-reduce is a barrier), and the rules behind the results became a recipe (`harness/synth.py`) whose
+predictions held on Falcon-H1-34B (sign flip at long context) and Falcon-40B (no winning split). The
+short technical write-up with diagrams and figures is [`blog/README.md`](blog/README.md); the full plan,
+execution log and findings are in
 [`doc/stage1_elastic_mixer_parallelism_plan.md`](doc/stage1_elastic_mixer_parallelism_plan.md).
 
 ## What is being tested
@@ -27,17 +31,18 @@ the byte model and the go/no-go criteria, is in
 Primary model: Falcon-H1-7B on 4 GPUs. Generalization set: Falcon-H1-34B, Hymba-1.5B, Qwen3.5-35B-A3B or
 Nemotron 3 Nano, Falcon-40B or Command-R.
 
-## Layout (planned)
+## Layout
 
 ```
 doc/        plans and write-ups
+blog/       short technical write-up of the stage-1 experiments, with the figure script
 docker/     Dockerfile, run script and env for the mmp-dev container (vLLM v0.30.0, editable fork)
 scripts/    backup, fork, build, download, smoke test, sweep and analysis drivers
 configs/    model dimensions and sweep definitions
 harness/    4-rank layer harness on vLLM's own kernels and collectives
 analysis/   figures and the go/no-go summary
 tests/      CPU unit tests for sharding, swing bookkeeping and the byte model; one 4-GPU correctness test
-results/    raw CSVs (ignored), figures and summaries (committed)
+results/    raw CSVs (ignored), figures and summaries (committed) per model
 ```
 
 ## Build and run

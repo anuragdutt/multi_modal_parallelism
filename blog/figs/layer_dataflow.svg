@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="575" viewBox="0 0 1000 575" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="12">
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker></defs>
+<rect width="1000" height="575" fill="white"/>
+<text x="240" y="24" font-size="14" text-anchor="middle" fill="#222" font-weight="bold">vLLM today: tensor parallelism (tp4)</text>
+<text x="240" y="42" font-size="11" text-anchor="middle" fill="#555" font-style="italic">every rank runs both branches; 4 four-rank collectives per layer</text>
+<rect x="170" y="60" width="140" height="30" rx="6" fill="#f4f4f4" stroke="#777" stroke-width="1.4"/>
+<text x="240.0" y="75.0" text-anchor="middle" dominant-baseline="middle" font-size="12">input RMSNorm</text>
+<line x1="240" y1="90" x2="130" y2="130" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<line x1="240" y1="90" x2="350" y2="130" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<text x="50" y="104" font-size="10" text-anchor="start" fill="#c0392b" font-weight="bold">ranks 0-3</text>
+<text x="50" y="122" font-size="10" text-anchor="start" fill="#555">x * attn_in</text>
+<text x="430" y="104" font-size="10" text-anchor="end" fill="#c0392b" font-weight="bold">ranks 0-3</text>
+<text x="430" y="122" font-size="10" text-anchor="end" fill="#555">x * ssm_in</text>
+<rect x="50" y="130" width="160" height="30" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="130.0" y="145.0" text-anchor="middle" dominant-baseline="middle" font-size="12">qkv_proj (col-parallel)</text>
+<line x1="130" y1="160" x2="130" y2="174" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="50" y="174" width="160" height="44" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="130.0" y="188.5" text-anchor="middle" dominant-baseline="middle" font-size="12">paged FA2 decode</text>
+<text x="130.0" y="203.5" text-anchor="middle" dominant-baseline="middle" font-size="12">KV head(s) of this rank</text>
+<line x1="130" y1="218" x2="130" y2="232" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="50" y="232" width="160" height="30" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="130.0" y="247.0" text-anchor="middle" dominant-baseline="middle" font-size="12">o_proj (row-parallel)</text>
+<rect x="270" y="130" width="160" height="30" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="350.0" y="145.0" text-anchor="middle" dominant-baseline="middle" font-size="12">in_proj [z|x|B|C|dt]</text>
+<line x1="350" y1="160" x2="350" y2="174" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="270" y="174" width="160" height="44" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="350.0" y="188.5" text-anchor="middle" dominant-baseline="middle" font-size="12">conv1d update +</text>
+<text x="350.0" y="203.5" text-anchor="middle" dominant-baseline="middle" font-size="12">selective_state_update</text>
+<line x1="350" y1="218" x2="350" y2="232" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="270" y="232" width="160" height="30" rx="6" fill="#f9d6d6" stroke="#c0392b" stroke-width="1.4"/>
+<text x="350.0" y="247.0" text-anchor="middle" dominant-baseline="middle" font-size="10.5">gated RMSNorm: all-reduce [T,1]</text>
+<line x1="350" y1="262" x2="350" y2="276" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="270" y="276" width="160" height="30" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="350.0" y="291.0" text-anchor="middle" dominant-baseline="middle" font-size="12">out_proj (row-parallel)</text>
+<line x1="130" y1="262" x2="130" y2="276" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="50" y="276" width="160" height="30" rx="6" fill="#f9d6d6" stroke="#c0392b" stroke-width="1.4"/>
+<text x="130.0" y="291.0" text-anchor="middle" dominant-baseline="middle" font-size="12">all-reduce (4 ranks)</text>
+<line x1="350" y1="306" x2="350" y2="320" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="270" y="320" width="160" height="30" rx="6" fill="#f9d6d6" stroke="#c0392b" stroke-width="1.4"/>
+<text x="350.0" y="335.0" text-anchor="middle" dominant-baseline="middle" font-size="12">all-reduce (4 ranks)</text>
+<line x1="130" y1="306" x2="220" y2="366" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<line x1="350" y1="350" x2="260" y2="366" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="150" y="366" width="180" height="30" rx="6" fill="#f4f4f4" stroke="#777" stroke-width="1.4"/>
+<text x="240.0" y="381.0" text-anchor="middle" dominant-baseline="middle" font-size="10.5">attn*attn_out + ssm*ssm_out + h</text>
+<line x1="240" y1="396" x2="240" y2="410" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="170" y="410" width="140" height="30" rx="6" fill="#f4f4f4" stroke="#777" stroke-width="1.4"/>
+<text x="240.0" y="425.0" text-anchor="middle" dominant-baseline="middle" font-size="12">pre-FF RMSNorm</text>
+<line x1="240" y1="440" x2="240" y2="454" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="150" y="454" width="180" height="30" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="240.0" y="469.0" text-anchor="middle" dominant-baseline="middle" font-size="12">gate/up (col) - SiLU - down (row)</text>
+<line x1="240" y1="484" x2="240" y2="498" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="170" y="498" width="140" height="30" rx="6" fill="#f9d6d6" stroke="#c0392b" stroke-width="1.4"/>
+<text x="240.0" y="513.0" text-anchor="middle" dominant-baseline="middle" font-size="12">all-reduce (4 ranks)</text>
+<line x1="240" y1="528" x2="240" y2="542" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<text x="240" y="558" font-size="11" text-anchor="middle" fill="#555">+ residual</text>
+<text x="760" y="24" font-size="14" text-anchor="middle" fill="#222" font-weight="bold">Branch split (split22)</text>
+<text x="760" y="42" font-size="11" text-anchor="middle" fill="#555" font-style="italic">ranks 0,1 run attention, ranks 2,3 run Mamba; 2 four-rank + 1 pair collective</text>
+<rect x="690" y="60" width="140" height="30" rx="6" fill="#f4f4f4" stroke="#777" stroke-width="1.4"/>
+<text x="760.0" y="75.0" text-anchor="middle" dominant-baseline="middle" font-size="12">input RMSNorm</text>
+<line x1="760" y1="90" x2="650" y2="130" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<line x1="760" y1="90" x2="870" y2="130" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<text x="570" y="104" font-size="10" text-anchor="start" fill="#c0392b" font-weight="bold">ranks 0,1</text>
+<text x="570" y="122" font-size="10" text-anchor="start" fill="#555">x * attn_in</text>
+<text x="950" y="104" font-size="10" text-anchor="end" fill="#c0392b" font-weight="bold">ranks 2,3</text>
+<text x="950" y="122" font-size="10" text-anchor="end" fill="#555">x * ssm_in</text>
+<rect x="570" y="130" width="160" height="30" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="650.0" y="145.0" text-anchor="middle" dominant-baseline="middle" font-size="12">qkv_proj (col-parallel)</text>
+<line x1="650" y1="160" x2="650" y2="174" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="570" y="174" width="160" height="44" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="650.0" y="188.5" text-anchor="middle" dominant-baseline="middle" font-size="12">paged FA2 decode</text>
+<text x="650.0" y="203.5" text-anchor="middle" dominant-baseline="middle" font-size="12">KV head(s) of this rank</text>
+<line x1="650" y1="218" x2="650" y2="232" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="570" y="232" width="160" height="30" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="650.0" y="247.0" text-anchor="middle" dominant-baseline="middle" font-size="12">o_proj (row-parallel)</text>
+<rect x="790" y="130" width="160" height="30" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="870.0" y="145.0" text-anchor="middle" dominant-baseline="middle" font-size="12">in_proj [z|x|B|C|dt]</text>
+<line x1="870" y1="160" x2="870" y2="174" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="790" y="174" width="160" height="44" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="870.0" y="188.5" text-anchor="middle" dominant-baseline="middle" font-size="12">conv1d update +</text>
+<text x="870.0" y="203.5" text-anchor="middle" dominant-baseline="middle" font-size="12">selective_state_update</text>
+<line x1="870" y1="218" x2="870" y2="232" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="790" y="232" width="160" height="30" rx="6" fill="#fde9c8" stroke="#c77d00" stroke-width="1.4"/>
+<text x="870.0" y="247.0" text-anchor="middle" dominant-baseline="middle" font-size="10.5">gated RMSNorm: pair all-reduce</text>
+<line x1="870" y1="262" x2="870" y2="276" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="790" y="276" width="160" height="30" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="870.0" y="291.0" text-anchor="middle" dominant-baseline="middle" font-size="12">out_proj (row-parallel)</text>
+<line x1="650" y1="262" x2="740" y2="366" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<line x1="870" y1="306" x2="780" y2="366" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="670" y="366" width="180" height="30" rx="6" fill="#f9d6d6" stroke="#c0392b" stroke-width="1.4"/>
+<text x="760.0" y="374.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">one all-reduce (4 ranks) of</text>
+<text x="760.0" y="387.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">attn*attn_out + ssm*ssm_out</text>
+<line x1="760" y1="396" x2="760" y2="410" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="690" y="410" width="140" height="30" rx="6" fill="#f4f4f4" stroke="#777" stroke-width="1.4"/>
+<text x="760.0" y="425.0" text-anchor="middle" dominant-baseline="middle" font-size="12">pre-FF RMSNorm</text>
+<line x1="760" y1="440" x2="760" y2="454" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="670" y="454" width="180" height="30" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="760.0" y="469.0" text-anchor="middle" dominant-baseline="middle" font-size="12">gate/up (col) - SiLU - down (row)</text>
+<line x1="760" y1="484" x2="760" y2="498" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<rect x="690" y="498" width="140" height="30" rx="6" fill="#f9d6d6" stroke="#c0392b" stroke-width="1.4"/>
+<text x="760.0" y="513.0" text-anchor="middle" dominant-baseline="middle" font-size="12">all-reduce (4 ranks)</text>
+<line x1="760" y1="528" x2="760" y2="542" stroke="#333" stroke-width="1.4" marker-end="url(#ar)"/>
+<text x="760" y="558" font-size="11" text-anchor="middle" fill="#555">+ residual</text>
+<line x1="510" y1="20" x2="510" y2="565" stroke="#bbb" stroke-width="1.2" stroke-dasharray="5,3"/>
+</svg>

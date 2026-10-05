@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="430" viewBox="0 0 1000 430" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="12">
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker></defs>
+<rect width="1000" height="430" fill="white"/>
+<text x="500" y="24" font-size="14" text-anchor="middle" fill="#222" font-weight="bold">Falcon-H1-7B, 4 ranks: what each rank owns and reads per decode step</text>
+<text x="220" y="50" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">rank 0</text>
+<text x="435" y="50" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">rank 1</text>
+<text x="650" y="50" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">rank 2</text>
+<text x="865" y="50" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">rank 3</text>
+<text x="14" y="80" font-size="13" text-anchor="start" fill="#222" font-weight="bold">tp4</text>
+<text x="14" y="96" font-size="10" text-anchor="start" fill="#555">(vLLM)</text>
+<rect x="120" y="62" width="200" height="118" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="220.0" y="87.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">q heads 0-2</text>
+<text x="220.0" y="100.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">KV head 0  (replica 1 of 2)</text>
+<text x="220.0" y="114.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">Mamba heads 0-5, B/C replicated</text>
+<text x="220.0" y="127.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">MLP columns 1/4</text>
+<text x="220.0" y="141.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">weights 79.4 MB</text>
+<text x="220.0" y="154.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">reads full KV head: 512 B x B x c</text>
+<rect x="335" y="62" width="200" height="118" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="435.0" y="87.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">q heads 3-5</text>
+<text x="435.0" y="100.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">KV head 0  (replica 2 of 2)</text>
+<text x="435.0" y="114.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">Mamba heads 6-11, B/C replicated</text>
+<text x="435.0" y="127.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">MLP columns 1/4</text>
+<text x="435.0" y="141.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">weights 79.4 MB</text>
+<text x="435.0" y="154.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">reads full KV head: 512 B x B x c</text>
+<rect x="550" y="62" width="200" height="118" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="650.0" y="87.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">q heads 6-8</text>
+<text x="650.0" y="100.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">KV head 1  (replica 1 of 2)</text>
+<text x="650.0" y="114.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">Mamba heads 12-17, B/C replicated</text>
+<text x="650.0" y="127.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">MLP columns 1/4</text>
+<text x="650.0" y="141.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">weights 79.4 MB</text>
+<text x="650.0" y="154.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">reads full KV head: 512 B x B x c</text>
+<rect x="765" y="62" width="200" height="118" rx="6" fill="#eef3fb" stroke="#3b5b8c" stroke-width="1.4"/>
+<text x="865.0" y="87.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">q heads 9-11</text>
+<text x="865.0" y="100.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">KV head 1  (replica 2 of 2)</text>
+<text x="865.0" y="114.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">Mamba heads 18-23, B/C replicated</text>
+<text x="865.0" y="127.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">MLP columns 1/4</text>
+<text x="865.0" y="141.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">weights 79.4 MB</text>
+<text x="865.0" y="154.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">reads full KV head: 512 B x B x c</text>
+<text x="500" y="200" font-size="10.5" text-anchor="middle" fill="#c0392b">aggregate KV traffic = 2x what the model needs: both replicas of a head read all of it every step; 4 four-rank all-reduces per layer</text>
+<text x="14" y="250" font-size="13" text-anchor="start" fill="#222" font-weight="bold">split22</text>
+<rect x="120" y="232" width="200" height="118" rx="6" fill="#e8f4ea" stroke="#2e7d32" stroke-width="1.4"/>
+<text x="220.0" y="257.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5" font-weight="bold">attention group</text>
+<text x="220.0" y="270.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">q heads 0-5</text>
+<text x="220.0" y="284.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">KV head 0  (no replica)</text>
+<text x="220.0" y="297.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">MLP columns 1/4</text>
+<text x="220.0" y="311.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">weights 67.6 MB</text>
+<text x="220.0" y="324.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">reads 512 B x B x c of KV, no SSM state</text>
+<rect x="335" y="232" width="200" height="118" rx="6" fill="#e8f4ea" stroke="#2e7d32" stroke-width="1.4"/>
+<text x="435.0" y="257.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5" font-weight="bold">attention group</text>
+<text x="435.0" y="270.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">q heads 6-11</text>
+<text x="435.0" y="284.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">KV head 1  (no replica)</text>
+<text x="435.0" y="297.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">MLP columns 1/4</text>
+<text x="435.0" y="311.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">weights 67.6 MB</text>
+<text x="435.0" y="324.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">reads 512 B x B x c of KV, no SSM state</text>
+<rect x="550" y="232" width="200" height="118" rx="6" fill="#fff3e0" stroke="#ef6c00" stroke-width="1.4"/>
+<text x="650.0" y="257.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5" font-weight="bold">Mamba group</text>
+<text x="650.0" y="270.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">Mamba heads 0-11</text>
+<text x="650.0" y="284.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">B/C replicated on the pair</text>
+<text x="650.0" y="297.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">MLP columns 1/4</text>
+<text x="650.0" y="311.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">weights 88.2 MB</text>
+<text x="650.0" y="324.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">reads 1.57 MB x B of state, no KV</text>
+<rect x="765" y="232" width="200" height="118" rx="6" fill="#fff3e0" stroke="#ef6c00" stroke-width="1.4"/>
+<text x="865.0" y="257.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5" font-weight="bold">Mamba group</text>
+<text x="865.0" y="270.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">Mamba heads 12-23</text>
+<text x="865.0" y="284.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">B/C replicated on the pair</text>
+<text x="865.0" y="297.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">MLP columns 1/4</text>
+<text x="865.0" y="311.25" text-anchor="middle" dominant-baseline="middle" font-size="10.5">weights 88.2 MB</text>
+<text x="865.0" y="324.75" text-anchor="middle" dominant-baseline="middle" font-size="10.5">reads 1.57 MB x B of state, no KV</text>
+<text x="500" y="372" font-size="10.5" text-anchor="middle" fill="#2e7d32">each rank carries one branch plus its MLP slice; KV traffic matches the model; 2 four-rank all-reduces + 1 pair all-reduce per layer</text>
+<text x="500" y="400" font-size="10.5" text-anchor="middle" fill="#444" font-style="italic">Why this cannot be a static win everywhere: the attention branch grows with context, the Mamba branch does not, so the slower group changes with (batch, context).</text>
+</svg>
