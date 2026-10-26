@@ -56,7 +56,7 @@ context first." Then: "docker exec into the vllm-mamba-sg docker and then test t
 made in vllm", and finally this NOTES.md.
 
 **Context before that (same conversation, 2026-10-05):** a blog-style write-up of the stage-1 "elastic mixer
-parallelism" experiments on Falcon-H1 was committed (`blog/README.md`, `blog/make_figs.py`, `blog/figs/*`, commit
+parallelism" experiments on Falcon-H1 was committed (`docs/docs/blog/README.md`, `docs/blog/make_figs.py`, `docs/blog/figs/*`, commit
 `c7a8044`). On 2026-10-25 the user asked to pivot: start from sequential hybrids (Nemotron 3 Nano, Qwen3.5 GDN) and
 derive their parallelism; the Nemotron architecture was reconstructed from the HF config (see section 6, F8). Then the
 user asked what the SG split results were, which led to this deep dive.
@@ -283,8 +283,8 @@ container's bash history and server_metrics exports]`.
 
 ### 3.7 This repo (`multi_modal_parallelism`) in one paragraph `[verified]`
 `harness/` = 4-rank layer harness on vLLM v0.30.0 kernels (Falcon-H1 branch split experiments), `configs/`, `scripts/`,
-`analysis/`, `results/<model>/{figs,summary}`, `doc/stage1_elastic_mixer_parallelism_plan.md` (plan + findings sections
-21-24), `blog/README.md` + `blog/make_figs.py` + `blog/figs/` (the stage-1 write-up, commit `c7a8044`), `docker/`
+`analysis/`, `results/<model>/{figs,summary}`, `docs/stage1_elastic_mixer_parallelism_plan.md` (plan + findings sections
+21-24), `docs/docs/blog/README.md` + `docs/blog/make_figs.py` + `docs/blog/figs/` (the stage-1 write-up, commit `c7a8044`), `docker/`
 (image `mmp:stage1`, container `mmp-dev`). It is unrelated to the SG code except as the successor line of work.
 
 ## 4. Container internals
@@ -350,7 +350,7 @@ Order of work in this session (2026-10-25/26). Agents ran read-only on guppy via
 `/tmp/masarani-ro` on etracker1. The vLLM-implementation reader is the only thread I did myself after its agent failed.
 
 ### 5.0 Pre-work in the same conversation (2026-10-05, 10-25)
-- Blog assets for the stage-1 Falcon-H1 experiments: `blog/README.md`, `blog/make_figs.py`, `blog/figs/*`, README
+- Blog assets for the stage-1 Falcon-H1 experiments: `docs/docs/blog/README.md`, `docs/blog/make_figs.py`, `docs/blog/figs/*`, README
   status update; commit `c7a8044`, pushed `[verified: git log]`.
 - Explanation of the recipe heuristics in `harness/synth.py` (R1 replication cap, R2 summed branches, R3 phase balance) and
   of the exact `split22` layout; reconstruction of the Nemotron 3 Nano architecture from
@@ -453,8 +453,8 @@ mechanism with per-rank instrumentation.
 - I have only final reports from the four successful agents, not their transcripts; numbers tagged `[from-agent]` were
   not re-derived except the spot checks listed.
 - The container's `/root/.bash_history` and the Aug-6 tar were read by the Audit; I did not re-read the tar.
-- The stage-1 experiments (2026-10-01/05) are documented in `doc/stage1_elastic_mixer_parallelism_plan.md` and
-  `blog/README.md`; this file does not repeat them.
+- The stage-1 experiments (2026-10-01/05) are documented in `docs/stage1_elastic_mixer_parallelism_plan.md` and
+  `docs/docs/blog/README.md`; this file does not repeat them.
 
 ## 6. Findings and explanations
 
@@ -608,9 +608,9 @@ documentation in this repo, scratch files on guppy created by the Tester, and me
 
 ### 7.1 This repo (`multi_modal_parallelism`)
 **(a) `blog/` and README status (commit `c7a8044`, 2026-10-05, pushed) `[verified: git log, git ls-files]`**
-- `blog/README.md` (250 lines): technical write-up of the stage-1 Falcon-H1 experiments (architecture, measurement
+- `docs/docs/blog/README.md` (250 lines): technical write-up of the stage-1 Falcon-H1 experiments (architecture, measurement
   stack, 7B result, swing-shard negative result, recipe, family results, byte-model accuracy, next steps, reproduce).
-- `blog/make_figs.py` (466 lines): rebuilds `blog/figs/` from `results/*/summary/summary.md` and
+- `docs/blog/make_figs.py` (466 lines): rebuilds `docs/blog/figs/` from `results/*/summary/summary.md` and
   `results/tp2_reference.csv`: PNGs `split22_speedup_heatmaps.png`, `recipe_pred_vs_meas.png`,
   `phase_balance_no_collectives.png`, `tp2_vs_split22.png`; SVG schematics `layer_dataflow.svg`, `rank_layouts.svg`,
   `barrier_timeline.svg`, `recipe_pipeline.svg`, `harness_stack.svg` (hand-written SVG via a small helper class).
@@ -620,7 +620,7 @@ documentation in this repo, scratch files on guppy created by the Tester, and me
   (PNG directly, SVG rasterised with cairosvg in a scratch venv). Revert: `git revert c7a8044`.
 ```diff
  README.md | status + layout (minimal edit)
- blog/README.md | 250 ++++  (new)
+ docs/blog/README.md | 250 ++++  (new)
  blog/make_figs.py | 466 ++++ (new)
  blog/figs/{5 svg, 4 png} (new)
 ```
@@ -781,7 +781,7 @@ sessions triggered `kex_exchange_identification: Connection reset by peer`).
 2. Decide whether SG survives as a layout at all. The data says no for pure Mamba-1 (gate ranks idle, SSM ranks read more
    bytes). The idea survives as a *balancing move* inside a mixer phase — the gate projection is the one piece of Mamba
    work that does not depend on the scan, so idle ranks can compute it and ship it off the critical path — which is how it
-   re-enters the Falcon-H1 branch-split design (`doc/stage1_elastic_mixer_parallelism_plan.md` section 22).
+   re-enters the Falcon-H1 branch-split design (`docs/stage1_elastic_mixer_parallelism_plan.md` section 22).
 3. For the planned pivot to sequential hybrids (Nemotron 3 Nano, Qwen3.5), extend `harness/synth.py`'s
    `sequential_hybrid` template with data-parallel Mamba layers (no collectives, replicated weights, state bytes equal to
    TP) and mixed groups, re-score with graph curves, and measure the attention-DP and Mamba-DP cells the stage-1 sweep
@@ -809,7 +809,7 @@ sessions triggered `kex_exchange_identification: Connection reset by peer`).
 - **SPEED-Bench throughput_1k:** nvidia/SPEED-Bench ~1K-token prompt split (1536 records) used for Falcon-Mamba and Jamba.
 - **OSL anomaly:** shorter/non-canonical outputs under SG at c >= 8; caused by F2.
 - **Stage 1 / elastic mixer parallelism / split22 / swing:** this repo's Falcon-H1 branch-split experiments (see
-  `blog/README.md`), unrelated to SG except as the successor idea.
+  `docs/docs/blog/README.md`), unrelated to SG except as the successor idea.
 - **Recipe (`harness/synth.py`):** rules R1 (replication cap), R2 (summed branches share one all-reduce), R3 (phase balance)
   that rank rank-group layouts from a model's config.
 - **guppy / etracker1:** the shared 4x A6000 host and the operator's own machine.

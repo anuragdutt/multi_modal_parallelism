@@ -1,6 +1,6 @@
 # PLAN.md — Architecture-derived parallelism synthesis for SSM, GDN and hybrid LLMs: validation plan
 
-Written 2026-10-26 after the stage-1 Falcon-H1 experiments (`blog/README.md`, `doc/stage1_elastic_mixer_parallelism_plan.md`
+Written 2026-10-26 after the stage-1 Falcon-H1 experiments (`docs/docs/blog/README.md`, `docs/stage1_elastic_mixer_parallelism_plan.md`
 sections 21-24) and the SSM/gate-split deep dive (`NOTES.md`). This is the plan for the next stage: turn the recipe into a
 general synthesizer that works on any new model, validate it across families, and use it to find and prove the layouts that
 beat tensor parallelism. It is a plan, not a result: every number marked **predicted** is pre-registered here before the
@@ -545,7 +545,7 @@ python -m harness.synth2.score --pred results/synth2/<m>/cost_*.csv --meas resul
 ```
 
 ### E. Where things are
-`NOTES.md` (SG deep dive, container facts, benchmark audit), `blog/README.md` (stage-1 results), `doc/stage1_elastic_mixer_parallelism_plan.md`
+`NOTES.md` (SG deep dive, container facts, benchmark audit), `docs/docs/blog/README.md` (stage-1 results), `docs/stage1_elastic_mixer_parallelism_plan.md`
 (stage-1 plan and findings), `harness/synth.py` (recipe v1), `harness/seq_model.py` (Nemotron template v1),
 `configs/*.yaml` (dims), `results/*` (stage-1 sweeps), guppy `~/masarani` (SG history), guppy `~/backups/vllm-mamba-sg-2026-10-01`
 (SG code).

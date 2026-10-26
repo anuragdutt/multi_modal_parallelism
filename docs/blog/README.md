@@ -2,9 +2,9 @@
 
 *Stage 1 of the architecture-aware parallelism work in this repository. All measurements were taken on
 2026-10-01 and 2026-10-02 on guppy (4x RTX A6000 48 GB, PCIe Gen4, no NVLink, a shared box). Every number
-below comes from the committed `results/` tree; `python blog/make_figs.py` rebuilds the figures in
+below comes from the committed `results/` tree; `python docs/blog/make_figs.py` rebuilds the figures in
 `blog/figs/` from those files. The long-form plan, execution log and findings live in
-[`doc/stage1_elastic_mixer_parallelism_plan.md`](../doc/stage1_elastic_mixer_parallelism_plan.md).*
+[`doc/stage1_elastic_mixer_parallelism_plan.md`](../stage1_elastic_mixer_parallelism_plan.md).*
 
 ## TL;DR
 
@@ -106,14 +106,14 @@ Batch 16, graph step, layer time and speedup over `tp4`:
 | 32768 | 0.790 ms | 1.04x | 1.12x | 1.19x |
 
 Over the full 16-cell sweep `split22` is 1.07x to 1.38x, `tp4_fused` 1.03x to 1.13x and `tp4_streams`
-1.06x to 1.21x (full table in [`results/full/summary/summary.md`](../results/full/summary/summary.md)).
+1.06x to 1.21x (full table in [`results/full/summary/summary.md`](../../results/full/summary/summary.md)).
 
-![Layer time vs context, batch 16](../results/full/figs/layer_time_vs_ctx_B16.png)
+![Layer time vs context, batch 16](../../results/full/figs/layer_time_vs_ctx_B16.png)
 
 Where the time goes per rank (eager breakdown; the collective bars include the cross-rank wait, which is
 the imbalance made visible):
 
-![Collectives vs compute per rank](../results/full/figs/collective_share.png)
+![Collectives vs compute per rank](../../results/full/figs/collective_share.png)
 
 The diagnostic that explains the shape: run every rank's compute with the collectives removed
 (`--no-collectives`), so each rank's time is its own work only.
@@ -211,7 +211,7 @@ the candidate where every group is the whole world. Predictions were written dow
 
 ## 7. Byte-model accuracy (known limitation)
 
-![Predicted vs measured](../results/full/figs/pred_vs_meas.png)
+![Predicted vs measured](../../results/full/figs/pred_vs_meas.png)
 
 Per-step predictions for the graph variant have a median relative error of 23% (p90 37%); the eager
 variant is launch-bound and far worse. Direction is right everywhere measured, and at short context the
@@ -237,7 +237,7 @@ scripts/smoke_test.sh                          # kernels, groups, fp32 reference
 scripts/run_full_sweep.sh                      # 7B: microbench, correctness, sweep, analysis
 scripts/run_family.sh && scripts/run_3b.sh && scripts/run_40b.sh
 python -m analysis.make_all --raw results/full/raw --out results/full
-python blog/make_figs.py                       # the figures in this post, from the committed summaries
+python docs/blog/make_figs.py                       # the figures in this post, from the committed summaries
 ```
 
 | where | what |

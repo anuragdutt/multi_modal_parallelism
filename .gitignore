@@ -58,3 +58,6 @@ docker/images/*
 
 # per-model raw CSVs (large); figures and summaries under results/<model>/ stay tracked
 results/*/raw/
+
+# SG container env with secrets (template is env.list.example)
+docker/sg/env.list

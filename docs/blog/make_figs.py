@@ -1,6 +1,6 @@
 """Build every figure in blog/figs from the committed results (no GPU, no raw CSVs needed).
 
-  python blog/make_figs.py            # from the repo root
+  python docs/blog/make_figs.py            # from the repo root
 
 Result plots are parsed from results/*/summary/summary.md (the CUDA-graph, min-over-repeats tables that
 analysis/make_all.py writes) and results/tp2_reference.csv. The schematics are drawn as plain SVG so they
@@ -19,8 +19,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-ROOT = Path(__file__).resolve().parents[1]
-FIGS = ROOT / "blog" / "figs"
+ROOT = Path(__file__).resolve().parents[2]
+FIGS = Path(__file__).resolve().parent / "figs"
 FIGS.mkdir(parents=True, exist_ok=True)
 
 MODELS = [  # (label, results dir)

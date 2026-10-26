@@ -1,0 +1,9 @@
+.git
+.container_home
+results
+logs
+docker/images
+docs/blog/figs
+**/__pycache__
+*.tar
+*.tar.gz
