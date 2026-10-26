@@ -12,7 +12,7 @@ USERNAME="$(id -un)"
 mkdir -p "$REPO/.container_home" "$REPO/results/raw" "$REPO/logs"
 [ -f "$REPO/docker/sg/env.list" ] || cp "$REPO/docker/sg/env.list.example" "$REPO/docker/sg/env.list"
 if ! docker ps -a --format '{{.Names}}' | grep -qx "$NAME"; then
-  docker run -d --name "$NAME" --gpus all --ipc=host --shm-size=32g --user "$UIDGID" \
+  docker run -d --init --name "$NAME" --gpus all --ipc=host --shm-size=32g --user "$UIDGID" \
     --ulimit memlock=-1 --ulimit stack=67108864 --env-file "$REPO/docker/sg/env.list" \
     -p "${PORT}:8000" -e HOME=/workspace/.container_home -e HF_HOME=/hf -e MMP_IMAGE_TAG="$IMAGE" \
     -e USER="$USERNAME" -e LOGNAME="$USERNAME" \
