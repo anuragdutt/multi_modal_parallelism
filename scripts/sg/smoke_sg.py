@@ -3,7 +3,7 @@
 Run inside the container (as the host user, HF cache at /hf), on two GPUs that carry no foreign load:
   docker exec -e CUDA_VISIBLE_DEVICES=0,1 -e VLLM_ALLOW_INSECURE_SERIALIZATION=1 mmp-sg python3 /workspace/scripts/sg/smoke_sg.py --mode sg --out /workspace/results/sg/smoke_sg.json
   docker exec -e CUDA_VISIBLE_DEVICES=0,1 -e VLLM_ALLOW_INSECURE_SERIALIZATION=1 mmp-sg python3 /workspace/scripts/sg/smoke_sg.py --mode tp --out /workspace/results/sg/smoke_tp.json
-  docker exec mmp-sg python3 /workspace/scripts/sg/smoke_sg.py --compare /workspace/ results/sg/smoke_sg.json results/sg/smoke_tp.json
+  docker exec mmp-sg python3 /workspace/scripts/sg/smoke_sg.py --compare /workspace/results/sg/smoke_sg.json /workspace/results/sg/smoke_tp.json
 
 What it checks
   1. Every TP rank reports the same number of KV-cache groups and the same reorder threshold (the fix for the
