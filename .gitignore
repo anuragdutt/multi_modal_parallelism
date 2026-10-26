@@ -61,3 +61,7 @@ results/*/raw/
 
 # SG container env with secrets (template is env.list.example)
 docker/sg/env.list
+
+# overlay files live under a directory named models/ which the generic rule above ignores
+!vllm_overlays/**/models/
+!vllm_overlays/**/models/*.py
