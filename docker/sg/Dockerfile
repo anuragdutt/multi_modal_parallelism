@@ -21,12 +21,15 @@ WORKDIR /workspace
 ENTRYPOINT ["/bin/bash"]
 
 FROM ${BASE} AS sg-dev
-ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_VLLM=0.24.0 \
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.24.0 \
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_VLLM=0.24.0 \
     VLLM_TARGET_DEVICE=empty \
     UV_LINK_MODE=copy \
     PIP_ROOT_USER_ACTION=ignore
 RUN apt-get update && apt-get install -y --no-install-recommends git numactl rsync && rm -rf /var/lib/apt/lists/*
 COPY vllm /opt/vllm
+# the submodule's .git is a pointer into the parent repo and is meaningless inside the image
+RUN rm -rf /opt/vllm/.git
 RUN set -e; SP=/usr/local/lib/python3.12/dist-packages/vllm; \
     (cd "$SP" && find . -name "*.so" -print0 | xargs -0 -I{} cp --parents {} /opt/vllm/vllm/); \
     rm -rf /opt/vllm/vllm/vllm_flash_attn && cp -r "$SP/vllm_flash_attn" /opt/vllm/vllm/; \
