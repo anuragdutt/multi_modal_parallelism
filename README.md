@@ -13,7 +13,7 @@ the synthesizer and every result.
 | [`docs/generalization.md`](docs/generalization.md) | design note: why per-model tricks do not generalize and how the synthesizer is meant to |
 | [`docs/blog/README.md`](docs/blog/README.md) | stage-1 results write-up (Falcon-H1 branch split vs tensor parallelism) with figures; `docs/blog/make_figs.py` rebuilds them |
 | [`docs/stage1_elastic_mixer_parallelism_plan.md`](docs/stage1_elastic_mixer_parallelism_plan.md) | the stage-1 plan with its execution log and findings (sections 21-24) |
-| `vllm/` | git submodule: fork `anuragdutt/vllm`, branch `mmp/sg` (vLLM v0.24.0 + the SSM/gate split as it ran + the batch-reorder fix); later `mmp/stage2` for the elastic attention work |
+| `vllm_fork/` | git submodule (path `vllm_fork/`, named so it never shadows the `vllm` package): fork `anuragdutt/vllm`, branch `mmp/sg` (vLLM v0.24.0 + the SSM/gate split as it ran + the batch-reorder fix); later `mmp/stage2` for the elastic attention work |
 | `vllm_overlays/sg-2026-07-31/` | the exact files copied from the original container's installed vLLM (with checksums and provenance): ground truth of what produced the SG benchmarks |
 | `docker/` | two images: `mmp:stage1` (v0.30.0 harness, container `mmp-dev`) and `mmp:sg-{replica,dev}` (v0.24.0 SG, container `mmp-sg`); see `docker/README.md` |
 | `harness/` | 4-rank layer harness on vLLM kernels (`run.py`, `sweep.py`, `synth.py` recipe v1, model templates); `harness/synth2/` arrives per the plan |

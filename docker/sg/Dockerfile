@@ -4,7 +4,7 @@
 #
 # Target `sg-replica`: the installed package plus the ten files copied out of the original container's
 #   site-packages (vllm_overlays/sg-2026-07-31). This is byte-for-byte what produced the Aug-Sep 2026 benchmarks.
-# Target `sg-dev`: an editable install of the fork checkout (git submodule ./vllm, branch mmp/sg) reusing the
+# Target `sg-dev`: an editable install of the fork checkout (git submodule ./vllm_fork, branch mmp/sg) reusing the
 #   image's compiled extensions, so edits to the fork run without a rebuild. Default target.
 #
 # Build (from the repo root, with the submodule initialised):
@@ -27,7 +27,7 @@ ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.24.0 \
     UV_LINK_MODE=copy \
     PIP_ROOT_USER_ACTION=ignore
 RUN apt-get update && apt-get install -y --no-install-recommends git numactl rsync && rm -rf /var/lib/apt/lists/*
-COPY vllm /opt/vllm
+COPY vllm_fork /opt/vllm
 # the submodule's .git is a pointer into the parent repo and is meaningless inside the image
 RUN rm -rf /opt/vllm/.git
 RUN set -e; SP=/usr/local/lib/python3.12/dist-packages/vllm; \

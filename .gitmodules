@@ -1,5 +1,5 @@
 [submodule "vllm"]
-	path = vllm
+	path = vllm_fork
 	url = https://github.com/anuragdutt/vllm.git
 	branch = mmp/sg
 	shallow = true
