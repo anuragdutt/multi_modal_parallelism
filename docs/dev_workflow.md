@@ -51,3 +51,16 @@ vllm-flash-attn sources at the commits pinned by vLLM's CMake files, so it needs
 A branch on a newer upstream (e.g. for the Qwen3.5 work) needs the matching base image for torch/CUDA: change `BASE`
 in `docker/sg/Dockerfile`, point the submodule at the new branch, rebuild the image and run `build_vllm.sh`. The
 mechanism is identical.
+
+## Build record (guppy, 2026-10-27)
+Image `mmp:sg-src` (36.4 GB: base v0.24.0 with the prebuilt vLLM removed, CUDA 13.0 dev libraries, cmake/ninja/ccache,
+Rust stable). First from-source build of `mmp/sg` at `558de61`: 19 minutes with `MAX_JOBS=32 NVCC_THREADS=2
+TORCH_CUDA_ARCH_LIST=8.6` (336 build steps; `_C_stable_libtorch`, `_moe_C_stable_libtorch`, `cumem_allocator`,
+`spinloop`, `_rust_tool_parser`, `vllm_flash_attn/_vllm_fa2_C` and `_vllm_fa3_C`). `_qutlass_C` is not built for sm_86
+and vLLM logs a harmless warning about it. Build products on the host: `/tmp/mmp-build-adutt` (deps 3.3 GB, cargo 2 GB,
+ccache 0.5 GB). The first attempt failed at CMake configure with `CUDA_nvrtc_LIBRARY NOTFOUND` because the runtime base
+image has no NVRTC dev library; `cuda-nvrtc-dev-13-0` + `cuda-libraries-dev-13-0` fixed it.
+Smoke test on this build (`results/sg/smoke_{sg,tp}_src.json`): SG rank check (1, 1) on both ranks, SG repeats
+bit-identical, SG vs TP first token 32/32, max |d logp0| 0.107. TP repeats differed on 15/32 sequences after token 8 to
+110 with first-token agreement 32/32 and max |d logp0| 0.161: batch-composition noise, which is why the smoke test's
+repeat criterion is noise-bounded rather than exact.

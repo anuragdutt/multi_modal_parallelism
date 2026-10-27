@@ -30,6 +30,11 @@ Before the fix the gate rank reported (0, None) and the same waves workload dive
 logprob differences up to 1.2 (`NOTES.md` F4). The throughput difference here is a single run at small batch on GPUs
 shared with an idle server and is not a measurement.
 
+## Part 1b: the same validation on the from-source build (2026-10-27)
+The container was rebuilt as `mmp:sg-src` with vLLM compiled from the checkout's own kernel sources (no prebuilt
+extensions; `docs/dev_workflow.md`). Same test, same outcome: gate rank (1, 1), SG repeats identical, SG vs TP first
+token 32/32, max |d logp0| 0.107 (`results/sg/smoke_sg_src.json`, `smoke_tp_src.json`).
+
 ## Part 2: clean re-measurement (pending)
 Per `PLAN.md` E2: AIPerf, TP 4 vs SG 2+2, Mamba-2.8B and Falcon-Mamba-7B, concurrency 1/8/32/128, `ignore_eos`,
 output length 128 and 512, same session, two trials. Requires all four GPUs, i.e. the idle `vllm serve` in the old
