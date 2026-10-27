@@ -26,6 +26,7 @@ ENV PIP_ROOT_USER_ACTION=ignore \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends git ccache numactl rsync curl ca-certificates build-essential \
+    cuda-nvrtc-dev-13-0 cuda-libraries-dev-13-0 \
     && rm -rf /var/lib/apt/lists/*
 # 1. Remove the prebuilt vLLM completely: no wheel, no compiled extensions, no CLI. Only the base's torch/CUDA stack stays.
 RUN python3 -m pip uninstall -y vllm && rm -rf /usr/local/lib/python3.12/dist-packages/vllm* /vllm-workspace/dist \
