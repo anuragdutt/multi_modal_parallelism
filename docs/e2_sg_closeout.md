@@ -39,3 +39,10 @@ token 32/32, max |d logp0| 0.107 (`results/sg/smoke_sg_src.json`, `smoke_tp_src.
 Per `PLAN.md` E2: AIPerf, TP 4 vs SG 2+2, Mamba-2.8B and Falcon-Mamba-7B, concurrency 1/8/32/128, `ignore_eos`,
 output length 128 and 512, same session, two trials. Requires all four GPUs, i.e. the idle `vllm serve` in the old
 container `vllm-mamba-sg` stopped. Scripts will live in `scripts/sg/`.
+
+## Caveat added 2026-11-01: NCCL transport
+
+The microbenchmark in `docs/sg_one_collective_design.md` section 9.3 shows that with NCCL defaults the 4-rank
+collectives on guppy do not use P2P (all links are `SYS`), which slows TP-4's two all-reduces per block by 1.5
+to 3.6x while the SG pair collectives are unaffected. The Part 2 re-measurement therefore runs TP-4 and SG both
+with and without `NCCL_P2P_LEVEL=SYS`; the per-layer model predicts the Jamba 2+2 gain disappears with P2P on.
