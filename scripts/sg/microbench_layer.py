@@ -341,8 +341,22 @@ def main():
         destroy_distributed_environment, destroy_model_parallel, init_model_parallel_group,
     )
 
+    from vllm.config import VllmConfig, set_current_vllm_config
+
     init_distributed_environment(world_size=world, rank=rank, distributed_init_method="env://", local_rank=local)
-    initialize_model_parallel(tensor_model_parallel_size=world)
+    # initialize_model_parallel() and the group coordinators read the current vLLM config
+    # (parallel sizes, custom-allreduce switch); a default config is what vLLM's own tests use.
+    with set_current_vllm_config(VllmConfig()):
+        initialize_model_parallel(tensor_model_parallel_size=world)
+        _run(args, batches, T, rank, world, local, dev, t0=time.time())
+
+
+def _run(args, batches, T, rank, world, local, dev, t0):
+    from vllm.distributed import get_tp_group, get_world_group
+    from vllm.distributed.parallel_state import (
+        destroy_distributed_environment, destroy_model_parallel, init_model_parallel_group,
+    )
+
     tp = get_tp_group()
     # old SG groups: gate ranks {0,1}, SSM ranks {2,3}; pair = (gate i, ssm i); branch = the two SSM ranks
     pair = init_model_parallel_group([[0, 2], [1, 3]], get_world_group().local_rank, "nccl", group_name="sg_pair")
@@ -352,7 +366,6 @@ def main():
     coll = Bench(dev, [tp, pair, branch], args.iters, args.reps)
     log = lambda *a: print(f"[rank{rank}]", *a, flush=True) if rank == 0 else None
 
-    t0 = time.time()
     results = {
         "meta": dict(
             host=os.uname().nodename, gpu=torch.cuda.get_device_name(dev), torch=torch.__version__,
