@@ -61,8 +61,9 @@ class Bench:
 
     def __init__(self, device, groups, iters=16, reps=25):
         self.device, self.groups, self.iters, self.reps = device, groups, iters, reps
+        self.eager_fallbacks: list[str] = []
 
-    def time(self, fn) -> float:
+    def time(self, fn, label: str = "") -> float:
         from vllm.distributed.parallel_state import GraphCaptureContext
 
         for _ in range(3):
@@ -70,12 +71,34 @@ class Bench:
         torch.cuda.synchronize()
         g = torch.cuda.CUDAGraph()
         ctx = GraphCaptureContext(torch.cuda.Stream(device=self.device))
-        with contextlib.ExitStack() as es:
-            for grp in self.groups:
-                es.enter_context(grp.graph_capture(ctx))
-            with torch.cuda.graph(g, stream=ctx.stream):
+        try:
+            with contextlib.ExitStack() as es:
+                for grp in self.groups:
+                    es.enter_context(grp.graph_capture(ctx))
+                with torch.cuda.graph(g, stream=ctx.stream):
+                    for _ in range(self.iters):
+                        fn()
+        except RuntimeError as e:
+            # kernels that stage a host tensor cannot be captured (vLLM runs them outside the
+            # graph as well); time them eagerly with events over `iters` back-to-back launches.
+            if "capture" not in str(e).lower():
+                raise
+            torch.cuda.synchronize()
+            self.eager_fallbacks.append(label or str(e)[:80])
+            for _ in range(3):
+                fn()
+            torch.cuda.synchronize()
+            ts = []
+            for _ in range(self.reps):
+                s = torch.cuda.Event(enable_timing=True)
+                e2 = torch.cuda.Event(enable_timing=True)
+                s.record()
                 for _ in range(self.iters):
                     fn()
+                e2.record()
+                e2.synchronize()
+                ts.append(s.elapsed_time(e2) * 1000.0 / self.iters)
+            return statistics.median(ts)
         torch.cuda.synchronize()
         for _ in range(2):
             g.replay()
@@ -157,7 +180,8 @@ def p_conv_prefill(b: Bench, dev, T, C, k):
         lambda: causal_conv1d_fn(
             x, w, bias, conv_states=states, query_start_loc=qsl, cache_indices=cidx,
             has_initial_state=has_init, activation="silu",
-        )
+        ),
+        label=f"conv_prefill T={T} C={C}",
     )
 
 
@@ -373,6 +397,7 @@ def _run(args, batches, T, rank, world, local, dev, t0):
             custom_allreduce_tp=getattr(getattr(tp.device_communicator, "ca_comm", None), "disabled", None),
             custom_allreduce_pair=getattr(getattr(pair.device_communicator, "ca_comm", None), "disabled", None),
             date=time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
+            nccl_env={k: v for k, v in os.environ.items() if k.startswith("NCCL_")},
         ),
         "models": {},
     }
@@ -461,6 +486,7 @@ def _run(args, batches, T, rank, world, local, dev, t0):
         if rank == 0:
             print(tables(name, m, batches, T, res), flush=True)
 
+    results["meta"]["eager_fallbacks"] = sorted(set(comp.eager_fallbacks + coll.eager_fallbacks))
     if rank == 0:
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         with open(args.out, "w") as f:
